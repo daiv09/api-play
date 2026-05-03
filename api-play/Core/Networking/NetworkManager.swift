@@ -71,7 +71,27 @@ final class NetworkManager: ObservableObject {
             let start = Date()
 
             do {
-                let (asyncBytes, urlResponse) = try await URLSession.shared.bytes(for: urlRequest)
+                let isStreamingRequested = request.headers.contains(where: { 
+                    $0.isEnabled && $0.key.lowercased() == "accept" && 
+                    ($0.value.lowercased().contains("event-stream") || $0.value.lowercased().contains("ndjson")) 
+                })
+                
+                let data: Data?
+                let asyncBytes: URLSession.AsyncBytes?
+                let urlResponse: URLResponse
+                
+                if isStreamingRequested {
+                    let res = try await URLSession.shared.bytes(for: urlRequest)
+                    asyncBytes = res.0
+                    urlResponse = res.1
+                    data = nil
+                } else {
+                    let res = try await URLSession.shared.data(for: urlRequest)
+                    data = res.0
+                    urlResponse = res.1
+                    asyncBytes = nil
+                }
+                
                 let elapsed = Date().timeIntervalSince(start)
 
                 guard let http = urlResponse as? HTTPURLResponse else {
@@ -120,10 +140,10 @@ final class NetworkManager: ObservableObject {
                 )
 
                 let contentType = headers["Content-Type"]?.lowercased() ?? ""
-                let isStreaming = contentType.contains("text/event-stream") || contentType.contains("application/x-ndjson")
+                let isStreamingResponse = contentType.contains("text/event-stream") || contentType.contains("application/x-ndjson")
                 let isBinary = contentType.contains("image/") || contentType.contains("pdf") || contentType.contains("video/") || contentType.contains("audio/")
                 
-                if isStreaming {
+                if isStreamingResponse, let bytes = asyncBytes {
                     var bodyString = ""
                     var dataBuffer = Data()
                     
@@ -141,7 +161,7 @@ final class NetworkManager: ObservableObject {
                     request.lastResponse = apiResponse
                     isLoading = false
                     
-                    for try await line in asyncBytes.lines {
+                    for try await line in bytes.lines {
                         bodyString += line + "\n"
                         if let lineData = (line + "\n").data(using: .utf8) {
                             dataBuffer.append(lineData)
@@ -158,25 +178,31 @@ final class NetworkManager: ObservableObject {
                     return apiResponse
                     
                 } else {
-                    var data = Data()
-                    for try await byte in asyncBytes {
-                        data.append(byte)
+                    let finalData: Data
+                    if let d = data {
+                        finalData = d
+                    } else if let bytes = asyncBytes {
+                        var temp = Data()
+                        for try await b in bytes { temp.append(b) }
+                        finalData = temp
+                    } else {
+                        finalData = Data()
                     }
                     
                     let bodyString: String
                     if isBinary {
-                        bodyString = "[Binary Data: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))]"
+                        bodyString = "[Binary Data: \(ByteCountFormatter.string(fromByteCount: Int64(finalData.count), countStyle: .file))]"
                     } else {
-                        bodyString = String(data: data, encoding: .utf8) ?? "<Unable to decode string>"
+                        bodyString = String(data: finalData, encoding: .utf8) ?? "<Unable to decode string>"
                     }
 
                     let apiResponse = APIResponse(
                         statusCode: http.statusCode,
-                        bodyData: data,
+                        bodyData: finalData,
                         headers: headers,
                         body: bodyString,
                         elapsedSeconds: elapsed,
-                        byteCount: data.count,
+                        byteCount: finalData.count,
                         url: url.absoluteString
                     )
 
@@ -184,7 +210,7 @@ final class NetworkManager: ObservableObject {
                     isLoading = false
                     
                     // Track Schema Drift
-                    if let jsonData = data as Data?, let json = try? JSONSerialization.jsonObject(with: jsonData) {
+                    if let jsonData = finalData as Data?, let json = try? JSONSerialization.jsonObject(with: jsonData) {
                         let currentSchema = SchemaDriftMonitor.generateSchema(for: json)
                         if request.baselineSchema == nil {
                             request.baselineSchema = currentSchema
