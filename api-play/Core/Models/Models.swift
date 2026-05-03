@@ -3,10 +3,12 @@ import SwiftData
 
 // MARK: - Enums
 
+/// Standard HTTP methods supported by the client.
 enum HTTPMethod: String, CaseIterable, Codable {
     case GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
 }
 
+/// Authentication strategies for requests.
 enum AuthType: String, CaseIterable, Codable {
     case none = "No Auth"
     case bearer = "Bearer Token"
@@ -14,6 +16,7 @@ enum AuthType: String, CaseIterable, Codable {
     case apiKey = "API Key"
 }
 
+/// Distinguishes between standard REST and GraphQL operations.
 enum RequestType: String, Codable, CaseIterable {
     case rest = "REST"
     case graphql = "GraphQL"
@@ -21,6 +24,7 @@ enum RequestType: String, Codable, CaseIterable {
 
 // MARK: - Supporting Structures
 
+/// A generic Key-Value pair used for Headers, Query Parameters, and Environment Variables.
 struct KVPair: Codable, Identifiable, Hashable {
     var id = UUID()
     var key: String = ""
@@ -28,12 +32,13 @@ struct KVPair: Codable, Identifiable, Hashable {
     var isEnabled: Bool = true
 }
 
-/// Updated to support binary data for Quick Look (Images, PDFs)
+/// A snapshot of an HTTP response.
+/// Optimized to support binary data for Quick Look (Images, PDFs, Videos).
 struct APIResponse: Codable, Hashable {
     var id = UUID()
     var statusCode: Int
     
-    /// 📎 CRITICAL: Store the raw bytes here to prevent image corruption
+    /// 📎 CRITICAL: Stores raw bytes to prevent corruption of non-textual responses.
     var bodyData: Data?
     
     var headers: [String: String]
@@ -42,10 +47,12 @@ struct APIResponse: Codable, Hashable {
     var byteCount: Int
     var url: String
     
+    /// Returns a human-readable status string (e.g., "200 OK").
     var statusLabel: String {
         HTTPURLResponse.localizedString(forStatusCode: statusCode).capitalized
     }
 
+    /// Helper to determine if the request fell within the 2xx range.
     var isSuccess: Bool {
         (200..<300).contains(statusCode)
     }
@@ -53,6 +60,7 @@ struct APIResponse: Codable, Hashable {
 
 // MARK: - SwiftData Models
 
+/// Represents a collection of requests, supporting hierarchical nesting.
 @Model
 final class RequestFolder {
     @Attribute(.unique) var id: UUID
@@ -60,9 +68,11 @@ final class RequestFolder {
     var createdAt: Date
     var order: Int
 
+    /// Relationship: Cascade deletes all requests within this folder.
     @Relationship(deleteRule: .cascade, inverse: \APIRequest.folder)
     var requests: [APIRequest]?
 
+    /// Relationship: Supports nested folder structures.
     @Relationship(deleteRule: .cascade, inverse: \RequestFolder.parent)
     var children: [RequestFolder]?
 
@@ -78,12 +88,11 @@ final class RequestFolder {
     }
 }
 
-// MARK: - APIRequest
-
+/// The primary model for an API request in api-play.
 @Model
 final class APIRequest {
 
-    // MARK: - Core
+    // MARK: - Core Request Data
     @Attribute(.unique) var id: UUID
     var name: String
     var urlString: String
@@ -98,22 +107,27 @@ final class APIRequest {
 
     var updatedAt: Date
 
-    // MARK: - Favorites & Tags
+    // MARK: - Metadata
     var isFavorite: Bool
     var tags: [String]
 
-    // MARK: - GraphQL Support
+    // MARK: - GraphQL Specifics
     var requestType: RequestType
     var graphqlQuery: String
     var graphqlVariables: String
 
-    // MARK: - Response
+    // MARK: - Response Cache
+    /// Stores the result of the most recent execution.
     var lastResponse: APIResponse?
+    
+    // MARK: - Schema Drift Monitor
+    var baselineSchema: String?
+    var hasDrifted: Bool
 
     // MARK: - Relationships
     var folder: RequestFolder?
 
-    // MARK: - Init
+    // MARK: - Initialization
     init(name: String = "New Request") {
         self.id = UUID()
         self.name = name
@@ -135,5 +149,7 @@ final class APIRequest {
         self.requestType = .rest
         self.graphqlQuery = ""
         self.graphqlVariables = ""
+        
+        self.hasDrifted = false
     }
 }

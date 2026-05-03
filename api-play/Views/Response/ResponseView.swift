@@ -6,9 +6,9 @@ import Vision
 
 struct ResponseView: View {
     let response: APIResponse?
-    let requestId: UUID
-    @State private var viewMode: ViewMode = .json
+    let requestId: UUID // Ensure the parent view passes this in
     
+    @State private var viewMode: ViewMode = .json
     @Environment(AICoordinator.self) private var ai
     @State private var isShowingAI = false
     @State private var isAnalyzingVision = false
@@ -58,37 +58,37 @@ struct ResponseView: View {
     @ViewBuilder
     private func enhancedPreviewContent(for response: APIResponse) -> some View {
         VStack(spacing: 0) {
-            // The Web Content
             WebView(
                 htmlString: response.body,
                 baseURL: URL(string: response.url),
                 data: response.bodyData,
-                mimeType: response.headers.first(where: { $0.key.lowercased() == "content-type" })?.value
+                mimeType: response.headers.first(where: { $0.key.lowercased() == "content-type" })?.value,
+                requestId: requestId // Passed to WebView for identification
             )
-                .id(requestId)
+            .id(requestId)
             
             HStack {
-                Label("Internal HTML Preview", systemImage: "safari")
+                Label("Internal Preview", systemImage: "safari")
                     .font(.caption2)
                 
                 Spacer()
                 
-                // VISION TRIGGER BUTTON
+                // VISION TOGGLE BUTTON
                 Button {
-                    analyzeViewVisually()
+                    toggleVisualExplain()
                 } label: {
                     HStack {
                         if isAnalyzingVision {
                             ProgressView().controlSize(.small)
                         } else {
-                            Image(systemName: "eye.circle.fill")
+                            Image(systemName: isShowingAI ? "eye.slash.circle.fill" : "eye.circle.fill")
                         }
-                        Text("Visual Explain")
+                        Text(isShowingAI ? "Hide Explain" : "Visual Explain")
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .tint(.blue)
+                .tint(isShowingAI ? .orange : .blue)
                 .disabled(isAnalyzingVision)
                 
                 if let url = URL(string: response.url) {
@@ -104,25 +104,59 @@ struct ResponseView: View {
         }
     }
 
-    // MARK: - Computer Vision Logic
+    // MARK: - Computer Vision Toggle Logic
     
-    private func analyzeViewVisually() {
+    private func toggleVisualExplain() {
+        if isShowingAI {
+            isShowingAI = false
+            return
+        }
+
         isAnalyzingVision = true
         
-        // 1. Capture the current window/view as an image
-        // In a real implementation, you'd target the WebView's layer
+        // 1. Capture context
         let screenshot = capturePreviewSnapshot()
+        let currentURL = response?.url ?? "Unknown URL"
         
-        // 2. Use Vision Framework to perform OCR or Saliency Analysis
-        performVisionAnalysis(on: screenshot)
+        // 2. Run Vision OCR
+        performVisionAnalysis(on: screenshot) { detectedText in
+            Task { @MainActor in
+                // 3. Update AI State
+                ai.analyzeVisualContext(
+                    text: detectedText,
+                    sourceURL: currentURL,
+                    image: screenshot
+                )
+                
+                isAnalyzingVision = false
+                isShowingAI = true
+            }
+        }
+    }
+
+    private func performVisionAnalysis(on image: NSImage, completion: @escaping (String) -> Void) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            completion("")
+            return
+        }
         
-        // 3. Toggle the AI panel to show results
-        isShowingAI = true
-        isAnalyzingVision = false
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        let textRequest = VNRecognizeTextRequest { request, _ in
+            guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                completion("")
+                return
+            }
+            let detectedText = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+            completion(detectedText)
+        }
+        
+        textRequest.recognitionLevel = .accurate
+        DispatchQueue.global(qos: .userInitiated).async {
+            try? requestHandler.perform([textRequest])
+        }
     }
     
     private func capturePreviewSnapshot() -> NSImage {
-        // This captures the current view as a bitmap for the Vision framework
         let view = NSApplication.shared.windows.first?.contentView
         let imageRep = view?.bitmapImageRepForCachingDisplay(in: view?.bounds ?? .zero)
         if let rep = imageRep {
@@ -133,28 +167,8 @@ struct ResponseView: View {
         }
         return NSImage()
     }
-    
-    private func performVisionAnalysis(on image: NSImage) {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-        
-        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        
-        // Example: Detect Rectangles/Buttons or Text in the UI
-        let textRequest = VNRecognizeTextRequest { request, error in
-            guard let observations = request.results as? [VNRecognizedTextObservation] else { return }
-            
-            let detectedText = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
-            
-            // Send the detected visual data to your AI Coordinator
-            Task { @MainActor in
-                ai.analyzeVisualContext(text: detectedText)
-            }
-        }
-        
-        try? requestHandler.perform([textRequest])
-    }
 
-    // MARK: - Supporting Views (Toolbar, Status, etc. - Kept Same)
+    // MARK: - Supporting Views (Kept for compatibility)
     
     private func enhancedToolbar(for response: APIResponse) -> some View {
         HStack(spacing: 16) {
@@ -191,7 +205,7 @@ struct ResponseView: View {
 
     private func jsonContentView(content: String) -> some View {
         ScrollView {
-            Text(prettify(content)).font(.system(size: 12, design: .monospaced))
+            Text(content).font(.system(size: 12, design: .monospaced))
                 .padding(16).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
         }
     }
@@ -229,6 +243,5 @@ struct ResponseView: View {
     }
 
     private func formatSize(_ bytes: Int) -> String { ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) }
-    private func prettify(_ input: String) -> String { input } // Simplified for code length
     private func copyToClipboard(text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
 }

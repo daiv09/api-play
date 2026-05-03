@@ -3,13 +3,17 @@ import SwiftUI
 struct CodeGenView: View {
     let request: APIRequest
     
+    @Environment(AICoordinator.self) private var ai
+    
     @State private var selectedLang: CodeLang = .curl
     @State private var schemaResult: String = ""
     @State private var isFetchingSchema = false
     @State private var showCopySuccess = false
+    @State private var swiftModelResult: String = ""
+    @State private var isGeneratingSwiftModel = false
 
     enum CodeLang: String, CaseIterable {
-        case curl = "cURL", swift = "Swift", python = "Python", javascript = "JS"
+        case curl = "cURL", swift = "Swift", python = "Python", javascript = "JS", swiftModel = "Models"
     }
 
     var body: some View {
@@ -25,6 +29,12 @@ struct CodeGenView: View {
             // 🔥 GRAPHQL SCHEMA TOOLBAR
             if request.requestType == .graphql {
                 graphqlToolbar
+                Divider()
+            }
+            
+            // 🔥 AI SWIFT MODEL TOOLBAR
+            if selectedLang == .swiftModel {
+                swiftModelToolbar
                 Divider()
             }
 
@@ -116,6 +126,40 @@ struct CodeGenView: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
+    private var swiftModelToolbar: some View {
+        HStack {
+            Button(action: { Task { await generateSwiftModels() } }) {
+                Label(swiftModelResult.isEmpty ? "Generate Models" : "Regenerate",
+                      systemImage: "wand.and.stars")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.purple)
+            .controlSize(.small)
+            .disabled(isGeneratingSwiftModel || request.lastResponse == nil)
+
+            if isGeneratingSwiftModel {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+            }
+            
+            if request.lastResponse == nil {
+                Text("⚠️ Send request first")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            Spacer()
+            
+            if !swiftModelResult.isEmpty {
+                Button("Clear") { swiftModelResult = "" }
+                    .buttonStyle(.link)
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+    }
+
     private var copyButton: some View {
         Button {
             copy(displayContent())
@@ -167,6 +211,9 @@ struct CodeGenView: View {
     // MARK: - Generation Logic
 
     private func displayContent() -> String {
+        if selectedLang == .swiftModel {
+            return swiftModelResult.isEmpty ? "// Click 'Generate Models' to create Decodable structs using Apple Intelligence." : swiftModelResult
+        }
         return schemaResult.isEmpty ? generateCode() : schemaResult
     }
 
@@ -176,6 +223,7 @@ struct CodeGenView: View {
         case .swift: return swift()
         case .python: return python()
         case .javascript: return js()
+        case .swiftModel: return "" // Handled dynamically
         }
     }
 
@@ -292,6 +340,19 @@ struct CodeGenView: View {
             }
         } catch {
             schemaResult = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    private func generateSwiftModels() async {
+        guard let response = request.lastResponse else { return }
+        isGeneratingSwiftModel = true
+        defer { isGeneratingSwiftModel = false }
+        
+        do {
+            let code = try await ai.generateSwiftModel(from: response.body)
+            swiftModelResult = code
+        } catch {
+            swiftModelResult = "// Error generating models: \(error.localizedDescription)"
         }
     }
 

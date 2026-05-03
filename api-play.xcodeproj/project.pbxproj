@@ -8,22 +8,97 @@
 
 /* Begin PBXBuildFile section */
 		183EBC942F7EE79E00D48962 /* FoundationModels.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 183EBC932F7EE79E00D48962 /* FoundationModels.framework */; };
+		18522C702FA713C20092D18B /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18522C6F2FA713C20092D18B /* WidgetKit.framework */; };
+		18522C722FA713C20092D18B /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18522C712FA713C20092D18B /* SwiftUI.framework */; };
+		18522C812FA713C40092D18B /* QuickShotWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 18522C6E2FA713C20092D18B /* QuickShotWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		18522C7F2FA713C40092D18B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 18A3E2602F7D5BB000FD9A58 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 18522C6D2FA713C20092D18B;
+			remoteInfo = QuickShotWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		18522C862FA713C50092D18B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				18522C812FA713C40092D18B /* QuickShotWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		183EBC932F7EE79E00D48962 /* FoundationModels.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FoundationModels.framework; path = System/Library/Frameworks/FoundationModels.framework; sourceTree = SDKROOT; };
+		18522C6E2FA713C20092D18B /* QuickShotWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = QuickShotWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		18522C6F2FA713C20092D18B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		18522C712FA713C20092D18B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		18522C922FA71AB30092D18B /* QuickShotWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = QuickShotWidgetExtension.entitlements; sourceTree = "<group>"; };
 		18A3E2682F7D5BB000FD9A58 /* api-play.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "api-play.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		18522C822FA713C50092D18B /* Exceptions for "QuickShotWidget" folder in "QuickShotWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 18522C6D2FA713C20092D18B /* QuickShotWidgetExtension */;
+		};
+		18522C8C2FA719610092D18B /* Exceptions for "api-play" folder in "QuickShotWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"api-play.icon",
+				Assets.xcassets,
+				Core/Models/APIEnvironment.swift,
+				Core/Models/APIModels.swift,
+				Core/Models/Models.swift,
+				Core/Models/SharedContainer.swift,
+				Core/Networking/NetworkManager.swift,
+				Core/Security/KeychainHelper.swift,
+			);
+			target = 18522C6D2FA713C20092D18B /* QuickShotWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		18522C732FA713C20092D18B /* QuickShotWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				18522C822FA713C50092D18B /* Exceptions for "QuickShotWidget" folder in "QuickShotWidgetExtension" target */,
+			);
+			path = QuickShotWidget;
+			sourceTree = "<group>";
+		};
 		18A3E26A2F7D5BB000FD9A58 /* api-play */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				18522C8C2FA719610092D18B /* Exceptions for "api-play" folder in "QuickShotWidgetExtension" target */,
+			);
 			path = "api-play";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		18522C6B2FA713C20092D18B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				18522C722FA713C20092D18B /* SwiftUI.framework in Frameworks */,
+				18522C702FA713C20092D18B /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		18A3E2652F7D5BB000FD9A58 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -39,6 +114,8 @@
 			isa = PBXGroup;
 			children = (
 				183EBC932F7EE79E00D48962 /* FoundationModels.framework */,
+				18522C6F2FA713C20092D18B /* WidgetKit.framework */,
+				18522C712FA713C20092D18B /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -46,7 +123,9 @@
 		18A3E25F2F7D5BB000FD9A58 = {
 			isa = PBXGroup;
 			children = (
+				18522C922FA71AB30092D18B /* QuickShotWidgetExtension.entitlements */,
 				18A3E26A2F7D5BB000FD9A58 /* api-play */,
+				18522C732FA713C20092D18B /* QuickShotWidget */,
 				183EBC922F7EE79E00D48962 /* Frameworks */,
 				18A3E2692F7D5BB000FD9A58 /* Products */,
 			);
@@ -56,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				18A3E2682F7D5BB000FD9A58 /* api-play.app */,
+				18522C6E2FA713C20092D18B /* QuickShotWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -63,6 +143,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		18522C6D2FA713C20092D18B /* QuickShotWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 18522C832FA713C50092D18B /* Build configuration list for PBXNativeTarget "QuickShotWidgetExtension" */;
+			buildPhases = (
+				18522C6A2FA713C20092D18B /* Sources */,
+				18522C6B2FA713C20092D18B /* Frameworks */,
+				18522C6C2FA713C20092D18B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				18522C732FA713C20092D18B /* QuickShotWidget */,
+			);
+			name = QuickShotWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = QuickShotWidgetExtension;
+			productReference = 18522C6E2FA713C20092D18B /* QuickShotWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		18A3E2672F7D5BB000FD9A58 /* api-play */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 18A3E2752F7D5BB100FD9A58 /* Build configuration list for PBXNativeTarget "api-play" */;
@@ -70,10 +172,12 @@
 				18A3E2642F7D5BB000FD9A58 /* Sources */,
 				18A3E2652F7D5BB000FD9A58 /* Frameworks */,
 				18A3E2662F7D5BB000FD9A58 /* Resources */,
+				18522C862FA713C50092D18B /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				18522C802FA713C40092D18B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				18A3E26A2F7D5BB000FD9A58 /* api-play */,
@@ -95,6 +199,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					18522C6D2FA713C20092D18B = {
+						CreatedOnToolsVersion = 26.4;
+					};
 					18A3E2672F7D5BB000FD9A58 = {
 						CreatedOnToolsVersion = 26.4;
 					};
@@ -115,11 +222,19 @@
 			projectRoot = "";
 			targets = (
 				18A3E2672F7D5BB000FD9A58 /* api-play */,
+				18522C6D2FA713C20092D18B /* QuickShotWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		18522C6C2FA713C20092D18B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		18A3E2662F7D5BB000FD9A58 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -130,6 +245,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		18522C6A2FA713C20092D18B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		18A3E2642F7D5BB000FD9A58 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -139,7 +261,83 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		18522C802FA713C40092D18B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 18522C6D2FA713C20092D18B /* QuickShotWidgetExtension */;
+			targetProxy = 18522C7F2FA713C40092D18B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		18522C842FA713C50092D18B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = QuickShotWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3Q2Q39D24W;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = QuickShotWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = QuickShotWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.daiwiik.api-play-.QuickShotWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		18522C852FA713C50092D18B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = QuickShotWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3Q2Q39D24W;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = QuickShotWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = QuickShotWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.daiwiik.api-play-.QuickShotWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		18A3E2732F7D5BB100FD9A58 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -263,6 +461,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "api-play";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "api-play/api-play.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -288,7 +487,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.daiwiik.api-play";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.daiwiik.api-play-";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -305,6 +504,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "api-play";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "api-play/api-play.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -330,7 +530,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.daiwiik.api-play";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.daiwiik.api-play-";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -345,6 +545,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		18522C832FA713C50092D18B /* Build configuration list for PBXNativeTarget "QuickShotWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				18522C842FA713C50092D18B /* Debug */,
+				18522C852FA713C50092D18B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		18A3E2632F7D5BB000FD9A58 /* Build configuration list for PBXProject "api-play" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

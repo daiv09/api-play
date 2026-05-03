@@ -7,7 +7,6 @@ struct MainView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.modelContext) private var modelContext
     
-    // Fetch environments for the toolbar picker
     @Query(sort: \APIEnvironment.name) private var environments: [APIEnvironment]
     
     // MARK: - State
@@ -18,6 +17,7 @@ struct MainView: View {
     @State private var showAIInsights = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showCommandPalette = false
+    @State private var showWebhook = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -32,10 +32,8 @@ struct MainView: View {
             // MAIN CONTENT AREA
             if let request = selectedRequest {
                 HStack(spacing: 0) {
-                    
-                    // LEFT SIDE: Editor and Response (Flexible Column)
+                    // LEFT SIDE: Editor and Response
                     VSplitView {
-                        // 1. Request Editor
                         EditorView(request: request, environment: selectedEnvironment) { response in
                             request.lastResponse = response
                             request.updatedAt = Date()
@@ -43,7 +41,6 @@ struct MainView: View {
                         }
                         .frame(minHeight: 200, maxHeight: .infinity)
 
-                        // 2. Response Area with AI Overlay
                         ZStack(alignment: .trailing) {
                             ResponseView(
                                 response: request.lastResponse,
@@ -75,7 +72,6 @@ struct MainView: View {
                     }
                     .frame(maxWidth: .infinity)
 
-                    // RIGHT SIDE: Code Generation (Fixed Sidebar Column)
                     CodeGenView(request: request)
                         .frame(width: 350)
                         .background(Color(nsColor: .windowBackgroundColor))
@@ -83,7 +79,6 @@ struct MainView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
             } else {
-                // Placeholder State
                 ContentUnavailableView(
                     "Select a Request",
                     systemImage: "tray.fill",
@@ -92,38 +87,64 @@ struct MainView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        // MARK: - Toolbars
         .toolbar {
-            // 1. AI Insights Toggle
-            ToolbarItem(placement: .navigation) {
+            // LEFT-HAND SIDE: Navigation, Sidebar Toggle, and Creation
+            ToolbarItemGroup(placement: .navigation) { 
+                Menu {
+                    Button {
+                        // Logic for New Request
+                        let newRequest = APIRequest(name: "New Request")
+                        modelContext.insert(newRequest)
+                        selectedRequest = newRequest // Automatically select the new one
+                    } label: {
+                        Label("New Request", systemImage: "plus.circle")
+                    }
+
+                    Button {
+                        // Logic for New Folder
+                        let newFolder = RequestFolder(name: "New Collection", order: 0)
+                        modelContext.insert(newFolder)
+                    } label: {
+                        Label("New Folder", systemImage: "folder.badge.plus")
+                    }
+
+                    Divider()
+
+                    Button {
+                        // This triggers the alert/sheet logic you likely have in Sidebar
+                        // Or create a simple one directly:
+                        let newEnv = APIEnvironment(name: "New Environment")
+                        modelContext.insert(newEnv)
+                        selectedEnvironment = newEnv
+                    } label: {
+                        Label("New Environment", systemImage: "leaf.fill")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .help("Create New...")
+
+                // 3. Tools
                 Button {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         showAIInsights.toggle()
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .symbolEffect(.bounce, value: showAIInsights)
-                    }
+                    Image(systemName: "sparkles")
+                        .symbolEffect(.bounce, value: showAIInsights)
                 }
                 .keyboardShortcut("i", modifiers: .command)
                 .help("Toggle AI Insights")
-            }
 
-            // 2. New Window Button
-            ToolbarItem(placement: .status) {
                 Button {
-                    if let req = selectedRequest {
-                        openWindow(id: "request-detail", value: req.id)
-                    }
+                    showWebhook.toggle()
                 } label: {
-                    Image(systemName: "macwindow.badge.plus")
+                    Image(systemName: "network.badge.shield.half.filled")
                 }
-                .disabled(selectedRequest == nil)
-                .help("Open in New Window")
+                .help("Local Webhook Receiver")
             }
 
-            // 3. Environment Picker
+            // CENTER: Environment Picker
             ToolbarItem(placement: .principal) {
                 Picker("Environment", selection: $selectedEnvironment) {
                     Text("No Environment").tag(Optional<APIEnvironment>.none)
@@ -135,16 +156,35 @@ struct MainView: View {
                 .pickerStyle(.menu)
                 .frame(width: 180)
             }
+
+            // RIGHT: Status Actions
+            ToolbarItemGroup(placement: .status) {
+                Button {
+                    if let req = selectedRequest {
+                        openWindow(id: "request-detail", value: req.id)
+                    }
+                } label: {
+                    Image(systemName: "macwindow.badge.plus")
+                }
+                .disabled(selectedRequest == nil)
+                
+                Button {
+                    openWindow(id: "visual-flow-builder")
+                } label: {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                }
+            }
         }
-        // MARK: - Commands & Shortcuts
         .background {
             Button("") { showCommandPalette.toggle() }
                 .keyboardShortcut("k", modifiers: .command)
                 .opacity(0)
         }
         .sheet(isPresented: $showCommandPalette) {
-            CommandPaletteView()
-                .frame(width: 500, height: 400)
+            CommandPaletteView().frame(width: 500, height: 400)
+        }
+        .inspector(isPresented: $showWebhook) {
+            WebhookView()
         }
     }
 }

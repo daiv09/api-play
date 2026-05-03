@@ -1,9 +1,13 @@
 import SwiftUI
 import SwiftData
 import AppKit
+import UniformTypeIdentifiers
+import Vision
 
 struct SidebarView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AICoordinator.self) private var aiCoordinator
+    @Environment(WebhookService.self) private var webhookService
     
     @Query(sort: \RequestFolder.order) private var folders: [RequestFolder]
     @Query(sort: \APIEnvironment.name) private var environments: [APIEnvironment]
@@ -19,6 +23,7 @@ struct SidebarView: View {
     @State private var newNameBuffer = ""
     @State private var searchText = ""
     @State private var renamingRequestID: UUID?
+    @State private var isProcessingImage = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,11 +52,30 @@ struct SidebarView: View {
                     }
                     .onDelete(perform: deleteRootRequests)
                 }
+                
+                Section("Local Webhook Receiver") {
+                    WebhookSidebarModule()
+                }
             }
             .listStyle(.sidebar)
+            .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
+                if handleImageDrop(providers: providers) { return true }
+                if handleFileDrop(providers: providers) { return true }
+                return false
+            }
+            .overlay {
+                if isProcessingImage {
+                    VStack {
+                        ProgressView("Analyzing Image...")
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                    }
+                }
+            }
         }
         .searchable(text: $searchText, placement: .sidebar)
-        .toolbar { ToolbarItem { addButtonMenu } }
+        // Note: The addButtonMenu toolbar item is usually managed in MainView for better alignment
         .alert("New Folder", isPresented: $isAddingFolder) {
             TextField("Name", text: $newNameBuffer)
             Button("Create") { createFolder() }
@@ -90,15 +114,6 @@ struct SidebarView: View {
         }.padding(12)
     }
 
-    private var addButtonMenu: some View {
-        Menu {
-            Button { addRequest(to: nil) } label: { Label("New Request", systemImage: "doc.badge.plus") }
-            Button { isAddingFolder = true } label: { Label("New Folder", systemImage: "folder.badge.plus") }
-            Divider()
-            Button { isAddingEnv = true } label: { Label("New Environment", systemImage: "globe.badge.chevron.backward") }
-        } label: { Image(systemName: "plus") }
-    }
-
     private var topLevelFolders: [RequestFolder] { folders.filter { $0.parent == nil }.sorted { $0.order < $1.order } }
     private var filteredRootRequests: [APIRequest] { searchText.isEmpty ? rootRequests : rootRequests.filter { $0.name.localizedCaseInsensitiveContains(searchText) } }
 
@@ -118,7 +133,141 @@ struct SidebarView: View {
     }
 
     private func deleteRootRequests(at offsets: IndexSet) {
-        offsets.map { rootRequests[$0] }.forEach { modelContext.delete($0) }
+        offsets.map { rootRequests[$0] }.forEach { req in
+            SpotlightManager.deindex(requestID: req.id)
+            modelContext.delete(req)
+        }
+    }
+
+    private func handleImageDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }) else { return false }
+        isProcessingImage = true
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, error in
+            guard let data = data, let image = NSImage(data: data), let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                DispatchQueue.main.async { isProcessingImage = false }
+                return
+            }
+            let request = VNRecognizeTextRequest { request, error in
+                guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                    DispatchQueue.main.async { isProcessingImage = false }
+                    return
+                }
+                let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+                Task {
+                    defer { DispatchQueue.main.async { isProcessingImage = false } }
+                    do {
+                        let newReq = try await aiCoordinator.parseImageToRequest(text: text)
+                        await MainActor.run {
+                            modelContext.insert(newReq)
+                            selectedRequest = newReq
+                        }
+                    } catch {
+                        print("AI Parsing failed: \(error)")
+                    }
+                }
+            }
+            try? VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
+        }
+        return true
+    }
+
+    private func handleFileDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else { return false }
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+            guard let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+            if url.pathExtension.lowercased() == "har" {
+                DispatchQueue.main.async {
+                    do {
+                        let requests = try HARParser.parse(url: url)
+                        let folderName = url.deletingPathExtension().lastPathComponent
+                        let folder = RequestFolder(name: folderName, order: folders.count)
+                        modelContext.insert(folder)
+                        for req in requests {
+                            req.folder = folder
+                            modelContext.insert(req)
+                        }
+                    } catch {
+                        print("Failed to parse HAR: \(error)")
+                    }
+                }
+            }
+        }
+        return true
+    }
+}
+
+// MARK: - Webhook Sidebar Module
+struct WebhookSidebarModule: View {
+    @Environment(WebhookService.self) private var webhookService
+    @State private var isExpanded: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Circle()
+                    .fill(webhookService.isListening ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                
+                Text(webhookService.isListening ? "Port \(webhookService.port)" : "Offline")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                Button(webhookService.isListening ? "Stop" : "Start") {
+                    if webhookService.isListening {
+                        webhookService.stopListening()
+                    } else {
+                        webhookService.startListening()
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.caption.bold())
+                .foregroundStyle(webhookService.isListening ? .red : .blue)
+            }
+            .padding(.vertical, 4)
+
+            if !webhookService.payloads.isEmpty {
+                DisclosureGroup("Recent Payloads (\(webhookService.payloads.count))", isExpanded: $isExpanded) {
+                    ForEach(webhookService.payloads.prefix(5)) { payload in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(payload.method)
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(methodColor(payload.method))
+                                Text(payload.path)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    
+                    Button("Clear All") {
+                        webhookService.clearPayloads()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+                }
+                .font(.caption)
+            } else if webhookService.isListening {
+                Text("Waiting for requests...")
+                    .font(.caption.italic())
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+    
+    private func methodColor(_ method: String) -> Color {
+        switch method {
+        case "GET": return .green
+        case "POST": return .orange
+        case "PUT": return .blue
+        case "DELETE": return .red
+        default: return .secondary
+        }
     }
 }
 
@@ -129,26 +278,52 @@ struct RequestContextMenu: ViewModifier {
     @Binding var renamingRequestID: UUID?
     @Binding var selectedRequest: APIRequest?
 
+    private var isSelected: Bool {
+        selectedRequest?.id == request.id
+    }
+
     func body(content: Content) -> some View {
         content.contextMenu {
-            Button { request.isFavorite.toggle() } label: {
-                Label(request.isFavorite ? "Unpin" : "Pin", systemImage: request.isFavorite ? "star.slash" : "star")
+            Button {
+                request.isFavorite.toggle()
+                try? modelContext.save()
+            } label: {
+                Label {
+                    Text(request.isFavorite ? "Unpin" : "Pin")
+                } icon: {
+                    Image(systemName: request.isFavorite ? "star.slash" : "star")
+                }
             }
+            
             Divider()
-            Button { renamingRequestID = request.id } label: { Label("Rename", systemImage: "pencil") }
-            Button { duplicateRequest() } label: { Label("Duplicate", systemImage: "doc.on.doc") }
+            
+            Button { renamingRequestID = request.id } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            
+            Button { duplicateRequest() } label: {
+                Label("Duplicate", systemImage: "doc.on.doc")
+            }
+            
             Divider()
+            
             Button(role: .destructive) {
-                if selectedRequest?.id == request.id { selectedRequest = nil }
+                if isSelected { selectedRequest = nil }
+                SpotlightManager.deindex(requestID: request.id)
                 modelContext.delete(request)
-            } label: { Label("Delete", systemImage: "trash") }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
 
     private func duplicateRequest() {
         let dup = APIRequest(name: "\(request.name) Copy")
-        dup.urlString = request.urlString; dup.httpMethod = request.httpMethod; dup.folder = request.folder
-        modelContext.insert(dup); selectedRequest = dup
+        dup.urlString = request.urlString
+        dup.httpMethod = request.httpMethod
+        dup.folder = request.folder
+        modelContext.insert(dup)
+        selectedRequest = dup
     }
 }
 
@@ -213,10 +388,17 @@ struct RequestRow: View {
                     .foregroundStyle(isSelected ? .white : .primary)
             }
             Spacer()
-            if request.isFavorite { Image(systemName: "star.fill").font(.system(size: 8)).foregroundStyle(isSelected ? .white : .secondary) }
+            if request.hasDrifted {
+                Circle().fill(.orange).frame(width: 6, height: 6)
+            }
+            if request.isFavorite {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(isSelected ? .white : .blue) // Corrected color logic
+            }
         }
         .padding(.vertical, 2)
-        .contentShape(Rectangle()) // Ensures the whole row responds to right-click
+        .contentShape(Rectangle())
         .onChange(of: isRenaming) { if $1 { isFocused = true } }
     }
 

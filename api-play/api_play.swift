@@ -10,29 +10,14 @@ struct api_playApp: App {
     // Apple Intelligence coordinator tied to the App Scene lifecycle
     @State private var aiCoordinator = AICoordinator()
     
+    // Webhook Service
+    @State private var webhookService = WebhookService()
+    
     // MARK: - Model Container Setup
     /// Central SwiftData container managing the lifecycle of requests and environments
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            RequestFolder.self,
-            APIRequest.self,
-            APIEnvironment.self
-        ])
-        
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            allowsSave: true
-        )
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            // Log the error and fail gracefully in production, or crash during development
-            print("🧱 SwiftData Initialization Error: \(error)")
-            fatalError("Could not create ModelContainer: \(error.localizedDescription)")
-        }
-    }()
+    var sharedModelContainer: ModelContainer {
+        SharedContainer.shared
+    }
 
     var body: some Scene {
         
@@ -50,6 +35,7 @@ struct api_playApp: App {
                 // Injecting SwiftData context and AI Coordinator into the environment
                 .modelContainer(sharedModelContainer)
                 .environment(aiCoordinator)
+                .environment(webhookService)
                 .sheet(isPresented: $shouldShowOnboarding) {
                     OnboardingView(isShowing: $shouldShowOnboarding)
                 }
@@ -59,22 +45,8 @@ struct api_playApp: App {
         .windowToolbarStyle(.unified)
         .windowResizability(.automatic)
         .defaultSize(width: 1400, height: 900)
-        #endif
-
-        // MARK: - Multi-Window Support (Detached Details)
-        /// Allows users to open specific requests in a secondary window via Command+Click
-        WindowGroup("Request Detail", id: "request-detail", for: APIRequest.ID.self) { $requestId in
-            if let id = requestId {
-                ResponseDetailView(requestId: id)
-                    .modelContainer(sharedModelContainer)
-                    .environment(aiCoordinator)
-            } else {
-                ContentUnavailableView("No Request Selected", systemImage: "tray")
-            }
-        }
-
+        
         // MARK: - Global macOS Menu Bar Commands
-        #if os(macOS)
         .commands {
             // Standard macOS Menu Items (Hide/Show Sidebar, Toggle Fullscreen)
             SidebarCommands()
@@ -100,6 +72,33 @@ struct api_playApp: App {
                 }
             }
         }
+        #endif
+
+        WindowGroup("Request Detail", id: "request-detail", for: APIRequest.ID.self) { $requestId in
+            if let id = requestId {
+                ResponseDetailView(requestId: id)
+                    .modelContainer(sharedModelContainer)
+                    .environment(aiCoordinator)
+            } else {
+                ContentUnavailableView("No Request Selected", systemImage: "tray")
+            }
+        }
+        
+        // MARK: - Visual Flow Builder
+        WindowGroup("Visual Flow Builder", id: "visual-flow-builder") {
+            CanvasView()
+                .modelContainer(sharedModelContainer)
+                .environment(aiCoordinator)
+        }
+        .defaultSize(width: 800, height: 600)
+        
+        #if os(macOS)
+        // MARK: - Quick Request Menu Bar
+        MenuBarExtra("Quick Request", systemImage: "bolt.fill") {
+            QuickRequestView()
+                .modelContainer(sharedModelContainer)
+        }
+        .menuBarExtraStyle(.window) // Uses a popover instead of a strict menu list
         #endif
     }
 }

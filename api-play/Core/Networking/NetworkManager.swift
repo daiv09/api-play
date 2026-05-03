@@ -31,7 +31,7 @@ final class NetworkManager: ObservableObject {
 
     // MARK: - Execute Request
 
-    func execute(_ request: APIRequest, env: APIEnvironment?) async -> APIResponse? {
+    func execute(_ request: APIRequest, env: APIEnvironment?, isRetry: Bool = false) async -> APIResponse? {
             guard let url = buildURL(from: request, environment: env) else {
                 self.error = .invalidURL
                 return nil
@@ -71,7 +71,7 @@ final class NetworkManager: ObservableObject {
             let start = Date()
 
             do {
-                let (data, urlResponse) = try await URLSession.shared.data(for: urlRequest)
+                let (asyncBytes, urlResponse) = try await URLSession.shared.bytes(for: urlRequest)
                 let elapsed = Date().timeIntervalSince(start)
 
                 guard let http = urlResponse as? HTTPURLResponse else {
@@ -79,8 +79,38 @@ final class NetworkManager: ObservableObject {
                     isLoading = false
                     return nil
                 }
+                
+                // MARK: - Smart Auth Token Refresh (401 Interceptor)
+                if http.statusCode == 401 && !isRetry {
+                    if let refreshUrlStr = env?.variables.first(where: { $0.key == "refresh_url" })?.value,
+                       let refreshUrl = URL(string: interpolate(refreshUrlStr, env: env)) {
+                        
+                        var refreshReq = URLRequest(url: refreshUrl)
+                        refreshReq.httpMethod = "POST"
+                        
+                        let refreshToken = KeychainHelper.read(forKey: "refresh_token") ?? env?.variables.first(where: { $0.key == "refresh_token" })?.value
+                        
+                        if let token = refreshToken {
+                            refreshReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                        }
+                        
+                        if let (refreshData, refreshResp) = try? await URLSession.shared.data(for: refreshReq),
+                           let refreshHttp = refreshResp as? HTTPURLResponse, refreshHttp.statusCode == 200 {
+                            
+                            if let json = try? JSONSerialization.jsonObject(with: refreshData) as? [String: Any],
+                               let newAccessToken = json["access_token"] as? String {
+                                
+                                if let tokenVar = env?.variables.first(where: { $0.key == "access_token" }) {
+                                    tokenVar.value = newAccessToken
+                                }
+                                KeychainHelper.write(newAccessToken, forKey: "access_token")
+                                
+                                return await execute(request, env: env, isRetry: true)
+                            }
+                        }
+                    }
+                }
 
-                // Extract Headers
                 let headers = Dictionary(uniqueKeysWithValues:
                     http.allHeaderFields.compactMap { k, v -> (String, String)? in
                         guard let key = k as? String,
@@ -89,33 +119,84 @@ final class NetworkManager: ObservableObject {
                     }
                 )
 
-                // 📎 THE FIX: Handle Body String Safely
-                // If it's an image, video, audio or PDF, we don't want to display "broken" text in the JSON/Raw view.
                 let contentType = headers["Content-Type"]?.lowercased() ?? ""
+                let isStreaming = contentType.contains("text/event-stream") || contentType.contains("application/x-ndjson")
                 let isBinary = contentType.contains("image/") || contentType.contains("pdf") || contentType.contains("video/") || contentType.contains("audio/")
                 
-                let bodyString: String
-                if isBinary {
-                    bodyString = "[Binary Data: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))]"
+                if isStreaming {
+                    var bodyString = ""
+                    var dataBuffer = Data()
+                    
+                    var apiResponse = APIResponse(
+                        statusCode: http.statusCode,
+                        bodyData: nil,
+                        headers: headers,
+                        body: "",
+                        elapsedSeconds: elapsed,
+                        byteCount: 0,
+                        url: url.absoluteString
+                    )
+                    
+                    self.response = apiResponse
+                    request.lastResponse = apiResponse
+                    isLoading = false
+                    
+                    for try await line in asyncBytes.lines {
+                        bodyString += line + "\n"
+                        if let lineData = (line + "\n").data(using: .utf8) {
+                            dataBuffer.append(lineData)
+                        }
+                        
+                        apiResponse.bodyData = dataBuffer
+                        apiResponse.body = bodyString
+                        apiResponse.byteCount = dataBuffer.count
+                        
+                        self.response = apiResponse
+                        request.lastResponse = apiResponse
+                    }
+                    
+                    return apiResponse
+                    
                 } else {
-                    bodyString = String(data: data, encoding: .utf8) ?? "<Unable to decode string>"
+                    var data = Data()
+                    for try await byte in asyncBytes {
+                        data.append(byte)
+                    }
+                    
+                    let bodyString: String
+                    if isBinary {
+                        bodyString = "[Binary Data: \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))]"
+                    } else {
+                        bodyString = String(data: data, encoding: .utf8) ?? "<Unable to decode string>"
+                    }
+
+                    let apiResponse = APIResponse(
+                        statusCode: http.statusCode,
+                        bodyData: data,
+                        headers: headers,
+                        body: bodyString,
+                        elapsedSeconds: elapsed,
+                        byteCount: data.count,
+                        url: url.absoluteString
+                    )
+
+                    self.response = apiResponse
+                    isLoading = false
+                    
+                    // Track Schema Drift
+                    if let jsonData = data as Data?, let json = try? JSONSerialization.jsonObject(with: jsonData) {
+                        let currentSchema = SchemaDriftMonitor.generateSchema(for: json)
+                        if request.baselineSchema == nil {
+                            request.baselineSchema = currentSchema
+                        } else if request.baselineSchema != currentSchema {
+                            request.hasDrifted = true
+                        } else {
+                            request.hasDrifted = false
+                        }
+                    }
+
+                    return apiResponse
                 }
-
-                // Create the APIResponse with BOTH raw data and the string representation
-                let apiResponse = APIResponse(
-                    statusCode: http.statusCode,
-                    bodyData: data, // 👈 CRITICAL: Save raw bytes for Quick Look
-                    headers: headers,
-                    body: bodyString,
-                    elapsedSeconds: elapsed,
-                    byteCount: data.count,
-                    url: url.absoluteString
-                )
-
-                self.response = apiResponse
-                isLoading = false
-
-                return apiResponse
 
             } catch {
                 self.error = .underlying(error)
@@ -123,8 +204,49 @@ final class NetworkManager: ObservableObject {
                 return nil
             }
         }
-    // MARK: - REST Body
+    // MARK: - REST Body 
 
+    /// Extracts a value from a JSON response body using dot-notation (e.g. "data.user.id" or "items[0].id")
+    func extractValue(from response: APIResponse, keyPath: String) -> String? {
+        guard let data = response.bodyData,
+              let json = try? JSONSerialization.jsonObject(with: data) else {
+            return nil
+        }
+        
+        let components = keyPath.split(separator: ".").map(String.init)
+        var current: Any = json
+        
+        for component in components {
+            if let bracketStart = component.firstIndex(of: "["),
+               let bracketEnd = component.firstIndex(of: "]"),
+               bracketStart < bracketEnd {
+                
+                let arrayName = String(component[..<bracketStart])
+                let indexString = String(component[component.index(after: bracketStart)..<bracketEnd])
+                
+                guard let index = Int(indexString) else { return nil }
+                
+                if arrayName.isEmpty {
+                    if let array = current as? [Any], index < array.count {
+                        current = array[index]
+                    } else { return nil }
+                } else {
+                    if let dict = current as? [String: Any], let array = dict[arrayName] as? [Any], index < array.count {
+                        current = array[index]
+                    } else { return nil }
+                }
+            } else {
+                if let dict = current as? [String: Any], let val = dict[component] {
+                    current = val
+                } else {
+                    return nil
+                }
+            }
+        }
+        
+        return "\(current)"
+    }
+    
     private func applyRESTBody(to requestObj: inout URLRequest, request: APIRequest) {
         guard !request.requestBody.isEmpty,
               request.httpMethod != .GET else { return }
@@ -227,5 +349,33 @@ final class NetworkManager: ObservableObject {
             return [:]
         }
         return obj
+    }
+}
+
+// MARK: - Schema Drift Monitor
+
+class SchemaDriftMonitor {
+    static func generateSchema(for json: Any) -> String {
+        if let dict = json as? [String: Any] {
+            let sortedKeys = dict.keys.sorted()
+            let schemaParts = sortedKeys.map { "\($0):\(generateSchema(for: dict[$0]!))" }
+            return "{" + schemaParts.joined(separator: ",") + "}"
+        } else if let array = json as? [Any] {
+            if let first = array.first {
+                return "[\(generateSchema(for: first))]"
+            }
+            return "[]"
+        } else if let number = json as? NSNumber {
+            // Distinguish boolean from other numbers
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return "Bool"
+            }
+            return "Number"
+        } else if json is String {
+            return "String"
+        } else if json is NSNull {
+            return "Null"
+        }
+        return "Unknown"
     }
 }

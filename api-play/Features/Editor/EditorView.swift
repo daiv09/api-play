@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 struct EditorView: View {
     @Bindable var request: APIRequest
     var environment: APIEnvironment?
+    
+    @State private var showAgentConsole = false // Controls the sheet
 
     @StateObject private var network = NetworkManager()
     var onResponseReceived: ((APIResponse) -> Void)?
@@ -68,6 +70,13 @@ struct EditorView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // ADD THIS MODIFIER HERE:
+                .sheet(isPresented: $showAgentConsole) {
+                    AgentConsoleView(
+                        aiCoordinator: AICoordinator(), // Pass your instance here
+                        networkManager: network         // Use the @StateObject 'network' defined in EditorView
+                    )
+                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -88,11 +97,21 @@ struct EditorView: View {
                 .font(.system(.body, design: .monospaced))
                 .controlSize(.large)
 
+            // 🤖 NEW: AI Agent Trigger Button
+            Button {
+                showAgentConsole.toggle()
+            } label: {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.purple)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .help("Open AI Agent (Intent)")
+
             Button {
                 Task { await runRequest() }
             } label: {
                 HStack {
-                    // Changed network.isExecuting to network.isLoading
                     if network.isLoading {
                         ProgressView().controlSize(.small)
                     } else {
@@ -104,18 +123,19 @@ struct EditorView: View {
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.return, modifiers: .command)
-            .disabled(network.isLoading) // Changed to isLoading
+            .disabled(network.isLoading)
             
             Button {
                 request.updatedAt = Date()
+                SpotlightManager.index(request: request)
             } label: {
                 Image(systemName: "tray.and.arrow.down")
             }
             .buttonStyle(.bordered)
+            .controlSize(.large)
             .help("Save (⌘S)")
         }
     }
-
     // MARK: - Tab Router
     @ViewBuilder
     private var restContent: some View {
