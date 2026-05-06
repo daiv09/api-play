@@ -24,11 +24,13 @@ struct ContentView: View {
                     // LEFT/MIDDLE: The Editor & Response (The Priority View)
                     VSplitView {
                         EditorView(request: request, environment: selectedEnvironment) { resp in
-                            self.lastResponse = resp
+                            request.lastResponse = resp
+                            request.updatedAt = Date()
+                            try? modelContext.save()
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         
-                        ResponseView(response: lastResponse, requestId: request.id)
+                        ResponseView(request: request)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: 200, maxHeight: .infinity)
                     }

@@ -42,10 +42,7 @@ struct MainView: View {
                         .frame(minHeight: 200, maxHeight: .infinity)
 
                         ZStack(alignment: .trailing) {
-                            ResponseView(
-                                response: request.lastResponse,
-                                requestId: request.id
-                            )
+                            ResponseView(request: request)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             
                             if showAIInsights {

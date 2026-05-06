@@ -305,6 +305,10 @@ struct RequestContextMenu: ViewModifier {
                 Label("Duplicate", systemImage: "doc.on.doc")
             }
             
+            Button { duplicateAsNewVersion() } label: {
+                Label("Duplicate as New Version", systemImage: "plus.square.on.square")
+            }
+            
             Divider()
             
             Button(role: .destructive) {
@@ -322,6 +326,12 @@ struct RequestContextMenu: ViewModifier {
         dup.urlString = request.urlString
         dup.httpMethod = request.httpMethod
         dup.folder = request.folder
+        modelContext.insert(dup)
+        selectedRequest = dup
+    }
+    
+    private func duplicateAsNewVersion() {
+        let dup = request.duplicateAsNewVersion()
         modelContext.insert(dup)
         selectedRequest = dup
     }
@@ -386,6 +396,16 @@ struct RequestRow: View {
                 Text(request.name.isEmpty ? "Untitled Request" : request.name)
                     .lineLimit(1).font(.system(size: 12, weight: isSelected ? .medium : .regular))
                     .foregroundStyle(isSelected ? .white : .primary)
+                
+                if let version = request.version, !version.isEmpty {
+                    Text(version)
+                        .font(.system(size: 8, weight: .bold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(isSelected ? .white.opacity(0.2) : .blue.opacity(0.1))
+                        .foregroundStyle(isSelected ? .white : .blue)
+                        .cornerRadius(4)
+                }
             }
             Spacer()
             if request.hasDrifted {

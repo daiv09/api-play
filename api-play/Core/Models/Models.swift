@@ -126,6 +126,16 @@ final class APIRequest {
 
     // MARK: - Relationships
     var folder: RequestFolder?
+    
+    @Relationship(deleteRule: .cascade, inverse: \RequestCommit.request)
+    var commits: [RequestCommit]?
+    
+    var safeCommits: [RequestCommit] {
+        commits?.sorted(by: { $0.timestamp > $1.timestamp }) ?? []
+    }
+    
+    // MARK: - Versioning
+    var version: String?
 
     // MARK: - Initialization
     init(name: String = "New Request") {
@@ -151,5 +161,86 @@ final class APIRequest {
         self.graphqlVariables = ""
         
         self.hasDrifted = false
+        self.version = nil
+        self.commits = []
+    }
+}
+
+/// Represents a historical snapshot of an API request.
+@Model
+final class RequestCommit {
+    @Attribute(.unique) var id: UUID
+    var timestamp: Date
+    var commitMessage: String
+    var commitDescription: String
+    
+    // Snapshot fields
+    var url: String
+    var method: HTTPMethod
+    var headers: [KVPair]
+    var params: [KVPair]
+    var body: String
+    var response: APIResponse?
+    
+    // Relationship
+    var request: APIRequest?
+    
+    init(message: String, description: String, request: APIRequest) {
+        self.id = UUID()
+        self.timestamp = Date()
+        self.commitMessage = message
+        self.commitDescription = description
+        
+        self.url = request.urlString
+        self.method = request.httpMethod
+        self.headers = request.headers
+        self.params = request.params
+        self.body = request.requestBody
+        self.response = request.lastResponse
+        self.request = request
+    }
+}
+
+// MARK: - Versioning Extension
+extension APIRequest {
+    func duplicateAsNewVersion() -> APIRequest {
+        let newVersion = incrementVersion(self.version)
+        let dup = APIRequest(name: self.name)
+        dup.version = newVersion
+        dup.urlString = self.urlString
+        dup.httpMethod = self.httpMethod
+        dup.params = self.params
+        dup.headers = self.headers
+        dup.requestBody = self.requestBody
+        dup.auth = self.auth
+        dup.authToken = self.authToken
+        dup.requestType = self.requestType
+        dup.graphqlQuery = self.graphqlQuery
+        dup.graphqlVariables = self.graphqlVariables
+        dup.folder = self.folder
+        return dup
+    }
+    
+    private func incrementVersion(_ current: String?) -> String {
+        guard let current = current, !current.isEmpty else { return "v1" }
+        
+        // Try to find trailing numbers
+        let pattern = #"(.*?)([0-9]+)$"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+           let match = regex.firstMatch(in: current, options: [], range: NSRange(location: 0, length: current.utf16.count)) {
+            
+            let prefixRange = match.range(at: 1)
+            let numberRange = match.range(at: 2)
+            
+            if let prefix = Range(prefixRange, in: current),
+               let numberStr = Range(numberRange, in: current),
+               let number = Int(current[numberStr]) {
+                return String(current[prefix]) + "\(number + 1)"
+            }
+        }
+        
+        // If no number found, just append .1 or something, but "v1" is better if it was empty.
+        // If it was "v", make it "v1".
+        return current + " v2" // Default fallback
     }
 }

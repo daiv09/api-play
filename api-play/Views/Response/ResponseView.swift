@@ -5,10 +5,10 @@ import WebKit
 import Vision
 
 struct ResponseView: View {
-    let response: APIResponse?
-    let requestId: UUID // Ensure the parent view passes this in
+    @Bindable var request: APIRequest
     
     @State private var viewMode: ViewMode = .json
+    @State private var isShowingHistory = false
     @Environment(AICoordinator.self) private var ai
     @State private var isShowingAI = false
     @State private var isAnalyzingVision = false
@@ -19,23 +19,30 @@ struct ResponseView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let response = response {
+            if let response = request.lastResponse {
                 enhancedToolbar(for: response)
-                
                 Divider()
-
+                
                 ZStack {
-                    Color(nsColor: .textBackgroundColor)
-                    
-                    switch viewMode {
-                    case .json:
-                        jsonContentView(content: response.body)
-                    case .raw:
-                        rawContentView(content: response.body)
-                    case .headers:
-                        headersContentView(headers: response.headers)
-                    case .preview:
-                        enhancedPreviewContent(for: response)
+                    if isShowingHistory {
+                        CommitHistoryView(request: request) {
+                            isShowingHistory = false
+                        }
+                    } else {
+                        ZStack {
+                            Color(nsColor: .textBackgroundColor)
+                            
+                            switch viewMode {
+                            case .json:
+                                jsonContentView(content: response.body)
+                            case .raw:
+                                rawContentView(content: response.body)
+                            case .headers:
+                                headersContentView(headers: response.headers)
+                            case .preview:
+                                enhancedPreviewContent(for: response)
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -46,12 +53,39 @@ struct ResponseView: View {
                 
                 Divider()
                 footerStatusBar(for: response)
-                
+            } else if isShowingHistory {
+                // If no last response, but we want history, still show the history view
+                VStack(spacing: 0) {
+                    historyToolbar
+                    Divider()
+                    CommitHistoryView(request: request) {
+                        isShowingHistory = false
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 emptyStateView
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+    
+    private var historyToolbar: some View {
+        HStack {
+            Label("Commit History", systemImage: "clock.arrow.circlepath")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                isShowingHistory = false
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
     // MARK: - Component: Enhanced Preview
@@ -63,9 +97,9 @@ struct ResponseView: View {
                 baseURL: URL(string: response.url),
                 data: response.bodyData,
                 mimeType: response.headers.first(where: { $0.key.lowercased() == "content-type" })?.value,
-                requestId: requestId // Passed to WebView for identification
+                requestId: request.id
             )
-            .id(requestId)
+            .id(request.id)
             
             HStack {
                 Label("Internal Preview", systemImage: "safari")
@@ -116,7 +150,7 @@ struct ResponseView: View {
         
         // 1. Capture context
         let screenshot = capturePreviewSnapshot()
-        let currentURL = response?.url ?? "Unknown URL"
+        let currentURL = request.lastResponse?.url ?? "Unknown URL"
         
         // 2. Run Vision OCR
         performVisionAnalysis(on: screenshot) { detectedText in
@@ -187,6 +221,17 @@ struct ResponseView: View {
             .pickerStyle(.segmented).frame(width: 240).controlSize(.small)
             Button { copyToClipboard(text: response.body) } label: { Image(systemName: "doc.on.doc") }
             .buttonStyle(.plain)
+            
+            Divider().frame(height: 12)
+            
+            Button {
+                isShowingHistory.toggle()
+            } label: {
+                Label("History", systemImage: "clock.arrow.circlepath")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(isShowingHistory ? .blue : .secondary)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
@@ -232,14 +277,20 @@ struct ResponseView: View {
             Image(systemName: "info.circle")
             Text(response.headers["Content-Type"] ?? "text/html")
             Spacer()
-            Text("ID: \(requestId.uuidString.prefix(8))")
+            Text("ID: \(request.id.uuidString.prefix(8))")
         }
         .font(.system(size: 10, weight: .medium, design: .monospaced))
         .foregroundStyle(.secondary).padding(.horizontal, 12).padding(.vertical, 6)
     }
 
     private var emptyStateView: some View {
-        ContentUnavailableView { Label("No Response", systemImage: "bolt.fill") }
+        VStack {
+            ContentUnavailableView { Label("No Response", systemImage: "bolt.fill") }
+            Button("View History") {
+                isShowingHistory = true
+            }
+            .buttonStyle(.link)
+        }
     }
 
     private func formatSize(_ bytes: Int) -> String { ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) }
