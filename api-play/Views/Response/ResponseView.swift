@@ -88,10 +88,10 @@ struct ResponseView: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
-    // MARK: - Component: Enhanced Preview
     @ViewBuilder
     private func enhancedPreviewContent(for response: APIResponse) -> some View {
         VStack(spacing: 0) {
+            // 1. The main content
             WebView(
                 htmlString: response.body,
                 baseURL: URL(string: response.url),
@@ -100,14 +100,17 @@ struct ResponseView: View {
                 requestId: request.id
             )
             .id(request.id)
-            
+            .frame(maxWidth: .infinity, maxHeight: .infinity) // Force it to take all space
+
+            Divider() // Add a clear separation
+
+            // 2. The Bottom Toolbar
             HStack {
                 Label("Internal Preview", systemImage: "safari")
                     .font(.caption2)
                 
                 Spacer()
                 
-                // VISION TOGGLE BUTTON
                 Button {
                     toggleVisualExplain()
                 } label: {
@@ -133,8 +136,9 @@ struct ResponseView: View {
                     .controlSize(.small)
                 }
             }
-            .padding(10)
-            .background(.ultraThinMaterial)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial) // This provides the "bar" look at the bottom
         }
     }
 
@@ -221,6 +225,11 @@ struct ResponseView: View {
             .pickerStyle(.segmented).frame(width: 240).controlSize(.small)
             Button { copyToClipboard(text: response.body) } label: { Image(systemName: "doc.on.doc") }
             .buttonStyle(.plain)
+            
+            Divider().frame(height: 12)
+            
+            CommitButtonView(request: request)
+                .buttonStyle(.plain)
             
             Divider().frame(height: 12)
             

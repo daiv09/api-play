@@ -203,6 +203,21 @@ final class RequestCommit {
 
 // MARK: - Versioning Extension
 extension APIRequest {
+    /// 📝 Senior Logic: Compares the current draft state against the most recent history snapshot.
+    /// Returns true if any core field (URL, Method, Headers, Params, or Body) has changed.
+    var isDirty: Bool {
+        guard let lastCommit = safeCommits.first else {
+            // If no history exists, the request is inherently "dirty" as it has uncommitted state.
+            return true
+        }
+        
+        return urlString != lastCommit.url ||
+               httpMethod != lastCommit.method ||
+               headers != lastCommit.headers ||
+               params != lastCommit.params ||
+               requestBody != lastCommit.body
+    }
+
     func duplicateAsNewVersion() -> APIRequest {
         let newVersion = incrementVersion(self.version)
         let dup = APIRequest(name: self.name)

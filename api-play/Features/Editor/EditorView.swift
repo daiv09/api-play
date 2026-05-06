@@ -11,9 +11,6 @@ struct EditorView: View {
     @StateObject private var network = NetworkManager()
     var onResponseReceived: ((APIResponse) -> Void)?
     @State private var selectedTab: EditorTab = .params
-    @State private var isShowingCommitSheet = false
-    @State private var commitMessage = ""
-    @State private var commitDescription = ""
 
     enum EditorTab: String, CaseIterable {
         case params = "Params"
@@ -36,21 +33,6 @@ struct EditorView: View {
                     .frame(width: 160)
                     
                     Spacer()
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "tag.fill").font(.caption2).foregroundStyle(.secondary)
-                        TextField("v1", text: Binding(
-                            get: { request.version ?? "" },
-                            set: { request.version = $0.isEmpty ? nil : $0 }
-                        ))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .frame(width: 50)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .cornerRadius(6)
                 }
                 .padding(.top, 12)
                 .padding(.horizontal, 16)
@@ -102,80 +84,8 @@ struct EditorView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $isShowingCommitSheet) {
-            commitSheet
-        }
     }
     
-    private var commitSheet: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header
-                HStack {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .resizable()
-                        .frame(width: 32, height: 32)
-                        .foregroundStyle(.blue)
-                    
-                    VStack(alignment: .leading) {
-                        Text("Commit Changes")
-                            .font(.headline)
-                        Text("Provide a summary of the changes to this request.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.bottom, 8)
-
-                // Input Fields
-                VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Message").font(.caption).bold()
-                        TextField("Update endpoint URL...", text: $commitMessage)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Description").font(.caption).bold()
-                        TextEditor(text: $commitDescription)
-                            .font(.system(.body))
-                            .frame(height: 80)
-                            .padding(4)
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.2)))
-                    }
-                }
-            }
-            .padding(20)
-
-            Divider()
-
-            // macOS Standard Button Placement
-            HStack {
-                Button("Cancel") { isShowingCommitSheet = false }
-                    .keyboardShortcut(.escape, modifiers: [])
-                
-                Spacer()
-                
-                Button("Commit") {
-                    saveCommit()
-                    isShowingCommitSheet = false
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(commitMessage.isEmpty)
-                .keyboardShortcut(.return, modifiers: [.command])
-            }
-            .padding(16)
-            .background(Color(nsColor: .windowBackgroundColor))
-        }
-        .frame(width: 450) // Fixed width, flexible height is more native
-    }
-    private func saveCommit() {
-        let commit = RequestCommit(message: commitMessage, description: commitDescription, request: request)
-        // SwiftData will handle the insertion if relationship is set, but better to be explicit
-        request.modelContext?.insert(commit)
-        commitMessage = ""
-        commitDescription = ""
-    }
 
     // MARK: - URL Bar View
     private var urlBar: some View {
@@ -231,15 +141,9 @@ struct EditorView: View {
             .controlSize(.large)
             .help("Save (⌘S)")
             
-            Button {
-                isShowingCommitSheet = true
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .foregroundStyle(.blue)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .help("Commit Changes")
+            CommitButtonView(request: request)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
         }
     }
     // MARK: - Tab Router
@@ -272,45 +176,61 @@ struct KVPairEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            List {
-                // Remove the Section header to save vertical space if needed
-                ForEach($pairs) { $pair in
-                    HStack {
-                        Toggle("", isOn: $pair.isEnabled)
-                            .toggleStyle(.checkbox)
-                            .labelsHidden()
-                        
-                        TextField("Key", text: $pair.key)
-                            .textFieldStyle(.plain)
-                        
-                        Divider().frame(height: 12)
-                        
-                        TextField("Value", text: $pair.value)
-                            .textFieldStyle(.plain)
-                        
-                        Button {
-                            pairs.removeAll { $0.id == pair.id }
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
+            if pairs.isEmpty {
+                ContentUnavailableView {
+                    Label("No \(title)", systemImage: title.contains("Header") ? "list.bullet.rectangle" : "text.badge.plus")
+                } description: {
+                    Text("Add key-value pairs to customize your \(requestName).")
+                } actions: {
+                    Button("Add Row") {
+                        pairs.append(KVPair(key: "", value: ""))
                     }
-                    .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)) // 🔹 Force edge alignment
+                    .buttonStyle(.borderedProminent)
                 }
-                
-                Button {
-                    pairs.append(KVPair(key: "", value: ""))
-                } label: {
-                    Label("Add Parameter", systemImage: "plus")
-                        .font(.caption)
-                        .padding(.leading, 4)
+            } else {
+                List {
+                    ForEach($pairs) { $pair in
+                        HStack {
+                            Toggle("", isOn: $pair.isEnabled)
+                                .toggleStyle(.checkbox)
+                                .labelsHidden()
+                            
+                            TextField("Key", text: $pair.key)
+                                .textFieldStyle(.plain)
+                            
+                            Divider().frame(height: 12)
+                            
+                            TextField("Value", text: $pair.value)
+                                .textFieldStyle(.plain)
+                            
+                            Button {
+                                pairs.removeAll { $0.id == pair.id }
+                            } label: {
+                                Image(systemName: "minus.circle")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                    }
+                    
+                    Button {
+                        pairs.append(KVPair(key: "", value: ""))
+                    } label: {
+                        Label("Add Row", systemImage: "plus")
+                            .font(.caption)
+                            .padding(.leading, 4)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .listStyle(.bordered)
+                .scrollContentBackground(.hidden)
             }
-            .listStyle(.bordered) // 🔹 Better for edge-to-edge content on macOS
-            .scrollContentBackground(.hidden)
         }
+    }
+    
+    private var requestName: String {
+        title.lowercased().contains("header") ? "headers" : "parameters"
     }
 }
 
