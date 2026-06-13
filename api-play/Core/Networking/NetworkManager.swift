@@ -310,10 +310,14 @@ final class NetworkManager: ObservableObject {
             requestObj.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         case .basic:
-            let user = "admin" // Replace later with actual model
-            let pass = interpolate(request.authToken, env: env)
-            let creds = Data("\(user):\(pass)".utf8).base64EncodedString()
-            requestObj.setValue("Basic \(creds)", forHTTPHeaderField: "Authorization")
+            // The user‑supplied string is expected to be "user:pass"
+            let raw = interpolate(request.authToken, env: env)
+            let parts = raw.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            let user = parts.first.map(String.init) ?? ""
+            let pass = parts.count > 1 ? String(parts[1]) : ""
+            let credentials = "\(user):\(pass)"
+            let base64 = Data(credentials.utf8).base64EncodedString()
+            requestObj.setValue("Basic \(base64)", forHTTPHeaderField: "Authorization")
 
         case .apiKey:
             let key = interpolate(request.authToken, env: env)

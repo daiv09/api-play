@@ -7,6 +7,7 @@ struct QuickRequestView: View {
     @State private var response: APIResponse?
     @State private var viewMode: Int = 0 // 0: JSON, 1: Raw
     @State private var copied: Bool = false
+    @StateObject private var networkManager = NetworkManager()
     
     private var dummyRequest: APIRequest {
         // Automatically prepend http:// if missing and not localhost
@@ -56,6 +57,20 @@ struct QuickRequestView: View {
                 ProgressView()
                     .scaleEffect(0.8)
                     .padding(.top, 10)
+            }
+            
+            // Error Banner
+            if let error = networkManager.error, response == nil, !isExecuting {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text(error.localizedDescription)
+                        .font(.caption)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.08))
+                .cornerRadius(6)
             }
             
             // Response Area
@@ -134,10 +149,10 @@ struct QuickRequestView: View {
     private func executeRequest() {
         guard !urlString.isEmpty else { return }
         
-        let networkManager = NetworkManager()
         withAnimation {
             isExecuting = true
             self.response = nil
+            networkManager.error = nil
         }
         
         Task {

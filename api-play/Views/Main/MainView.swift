@@ -174,6 +174,16 @@ struct MainView: View {
         .sheet(isPresented: $showCommandPalette) {
             CommandPaletteView().frame(width: 500, height: 400)
         }
+        // ← after the existing .sheet block
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: Notification.Name("SelectRequestInMainView")
+            )
+        ) { notification in
+            if let request = notification.object as? APIRequest {
+                selectedRequest = request
+            }
+        }
         .inspector(isPresented: $showWebhook) {
             WebhookView()
         }
@@ -192,6 +202,12 @@ struct MainView: View {
             if let request = notification.object as? APIRequest {
                 self.selectedRequest = request
             }
+        }
+        // In MainView.swift – after the existing .onReceive for SelectRequestInMainView
+        .onReceive(NotificationCenter.default.publisher(
+            for: Notification.Name("TriggerCommandPalette")
+        )) { _ in
+            showCommandPalette = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerCommandPalette"))) { _ in
             self.showCommandPalette = true

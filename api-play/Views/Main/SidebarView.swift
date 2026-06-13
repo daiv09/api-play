@@ -24,6 +24,7 @@ struct SidebarView: View {
     @State private var searchText = ""
     @State private var renamingRequestID: UUID?
     @State private var isProcessingImage = false
+    @State private var imageDropError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +57,14 @@ struct SidebarView: View {
                 Section("Local Webhook Receiver") {
                     WebhookSidebarModule()
                 }
+            }
+            .alert("Import Failed", isPresented: Binding(
+                get: { imageDropError != nil },
+                set: { if !$0 { imageDropError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(imageDropError ?? "")
             }
             .listStyle(.sidebar)
             .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
@@ -187,7 +196,9 @@ struct SidebarView: View {
                             selectedRequest = newReq
                         }
                     } catch {
-                        print("AI Parsing failed: \(error)")
+                        await MainActor.run {
+                            imageDropError = "Couldn't import this image: \(error.localizedDescription)"
+                        }
                     }
                 }
             }

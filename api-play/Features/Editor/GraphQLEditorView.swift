@@ -33,12 +33,13 @@ struct GraphQLEditorView: View {
                     .buttonStyle(.plain)
                     .help("Clear Editor")
                     
-                    Button(action: { prettifyCurrentTab() }) {
+                    Button(action: prettifyCurrentTab) {
                         Image(systemName: "wand.and.stars")
                         Text("Prettify")
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .disabled(selectedTab != .variables && variables.isEmpty)
                 }
             }
             .padding(.horizontal, 16)
@@ -68,6 +69,45 @@ struct GraphQLEditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // MARK: - Prettify Helpers
+    private func prettifyCurrentTab() {
+        if selectedTab == .query {
+            query = prettifyQuery(query)
+        } else {
+            variables = prettifyVariables(variables)
+        }
+    }
+
+    // Very simple GraphQL‑query indenter (brace‑aware)
+    private func prettifyQuery(_ raw: String) -> String {
+        let lines = raw.components(separatedBy: .newlines)
+        var result = ""
+        var indent = 0
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if trimmed.hasPrefix("}") || trimmed.hasPrefix("]") {
+                indent = max(indent - 1, 0)
+            }
+            result += String(repeating: "  ", count: indent) + trimmed + "\n"
+            if trimmed.hasSuffix("{") || trimmed.hasSuffix("[") || trimmed.hasSuffix("(") {
+                indent += 1
+            }
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // JSON‑variables prettifier
+    private func prettifyVariables(_ raw: String) -> String {
+        guard let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data),
+              let pretty = try? JSONSerialization.data(withJSONObject: json,
+                                                       options: [.prettyPrinted, .sortedKeys]),
+              let str = String(data: pretty, encoding: .utf8) else { return raw }
+        return str
+    }
+
+    
     // MARK: - Native Styled Editor
     @ViewBuilder
     private func editorView(placeholder: String, text: Binding<String>, icon: String) -> some View {
@@ -109,48 +149,5 @@ struct GraphQLEditorView: View {
             .padding(.vertical, 4)
             .background(.thinMaterial)
         }
-    }
-    
-    // MARK: - Prettifier Logic
-    private func prettifyCurrentTab() {
-        if selectedTab == .query {
-            query = prettifyQuery(query)
-        } else {
-            variables = prettifyVariables(variables)
-        }
-    }
-    
-    private func prettifyQuery(_ raw: String) -> String {
-        let lines = raw.components(separatedBy: .newlines)
-        var formatted = ""
-        var indentLevel = 0
-        
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { continue }
-            
-            // Adjust indent level down if line starts with closing brace
-            if trimmed.hasPrefix("}") || trimmed.hasPrefix("]") {
-                indentLevel = max(0, indentLevel - 1)
-            }
-            
-            let indent = String(repeating: "  ", count: indentLevel)
-            formatted += indent + trimmed + "\n"
-            
-            // Adjust indent level up if line ends/contains opening brace
-            if trimmed.hasSuffix("{") || trimmed.hasSuffix("[") || trimmed.hasSuffix("(") {
-                indentLevel += 1
-            }
-        }
-        return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    
-    private func prettifyVariables(_ raw: String) -> String {
-        guard let data = raw.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data),
-              let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) else {
-            return raw
-        }
-        return String(data: prettyData, encoding: .utf8) ?? raw
     }
 }

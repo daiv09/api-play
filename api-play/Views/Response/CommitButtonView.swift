@@ -36,7 +36,6 @@ struct CommitButtonView: View {
         if request.isDirty {
             showCommitSheet = true
         } else {
-            // Native macOS haptic/feedback or just the alert
             showNoChangesAlert = true
         }
     }
@@ -109,8 +108,7 @@ struct CommitDialog: View {
         )
         
         modelContext.insert(newCommit)
-        try? modelContext.save()
-        
+        try? modelContext.save()          // ← ensure the snapshot is persisted
         dismiss()
     }
 }

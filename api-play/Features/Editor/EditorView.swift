@@ -87,6 +87,16 @@ struct EditorView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Network error alert
+        .alert("Request Failed", isPresented: Binding(
+            get: { network.isLoading == false && network.error != nil },
+            set: { if !$0 { network.error = nil } }
+        )) {
+            Button("OK", role: .cancel) { network.error = nil }
+        } message: {
+            Text(network.error?.localizedDescription ?? "An unknown error occurred.")
+        }
+
     }
     
 
@@ -250,7 +260,7 @@ struct BodyEditorView: View {
                     // 📎 Tier 4 Drop Logic
                     if let provider = providers.first {
                         _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                            if let url = url, let content = try? String(contentsOf: url) {
+                            if let url = url, let content = try? String(contentsOf: url, encoding: .utf8) {
                                 DispatchQueue.main.async {
                                     self.request.requestBody = content
                                 }
@@ -268,17 +278,17 @@ struct BodyEditorView: View {
                                     .font(.system(size: 10))
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                Button("Format JSON") {
-                                    guard let data = request.requestBody.data(using: .utf8),
-                                          let json = try? JSONSerialization.jsonObject(with: data),
-                                          let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]),
-                                          let formatted = String(data: prettyData, encoding: .utf8) else {
-                                        return
-                                    }
-                                    request.requestBody = formatted
-                                }
-                                .buttonStyle(.link)
-                                .font(.system(size: 10))
+                    Button("Format JSON") {
+                        guard let data = request.requestBody.data(using: .utf8),
+                              let json = try? JSONSerialization.jsonObject(with: data),
+                              let pretty = try? JSONSerialization.data(withJSONObject: json,
+                                                                       options: [.prettyPrinted, .withoutEscapingSlashes]),
+                              let formatted = String(data: pretty, encoding: .utf8) else { return }
+                        request.requestBody = formatted
+                    }
+                    .buttonStyle(.link)
+                    .font(.system(size: 10))
+
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -302,18 +312,31 @@ struct AuthEditorView: View {
                     Text("None").tag(AuthType.none)
                     Text("Bearer Token").tag(AuthType.bearer)
                     Text("Basic Auth").tag(AuthType.basic)
+                    Text("API Key").tag(AuthType.apiKey)
                 }
                 .pickerStyle(.menu)
-                .labelsHidden() // 🔹 Hide label to let picker use full width
+                .labelsHidden()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
-                if request.auth == .bearer {
+
+                switch request.auth {
+                case .bearer:
+                    authField(title: "Bearer Token", placeholder: "Enter token…")
+                case .basic:
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Bearer Token").font(.caption).foregroundStyle(.secondary)
-                        TextField("Enter token...", text: $request.authToken)
+                        Text("Username : Password")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("user:pass", text: $request.authToken)
                             .textFieldStyle(.roundedBorder)
                             .controlSize(.large)
+                        Text("Sent as Base64‑encoded Basic auth (e.g. admin:secret)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
+                case .apiKey:
+                    authField(title: "API Key", placeholder: "Enter key…")
+                case .none:
+                    EmptyView()
                 }
                 
                 Spacer()
@@ -322,5 +345,15 @@ struct AuthEditorView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+    
+    @ViewBuilder
+    private func authField(title: String, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            TextField(placeholder, text: $request.authToken)
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.large)
+        }
     }
 }
