@@ -188,5 +188,13 @@ struct MainView: View {
                 selectedEnvironment = environments.first(where: { $0.isActive })
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SelectRequestInMainView"))) { notification in
+            if let request = notification.object as? APIRequest {
+                self.selectedRequest = request
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerCommandPalette"))) { _ in
+            self.showCommandPalette = true
+        }
     }
 }

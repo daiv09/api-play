@@ -268,9 +268,17 @@ struct BodyEditorView: View {
                                     .font(.system(size: 10))
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                Button("Format JSON") { /* logic */ }
-                                    .buttonStyle(.link)
-                                    .font(.system(size: 10))
+                                Button("Format JSON") {
+                                    guard let data = request.requestBody.data(using: .utf8),
+                                          let json = try? JSONSerialization.jsonObject(with: data),
+                                          let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]),
+                                          let formatted = String(data: prettyData, encoding: .utf8) else {
+                                        return
+                                    }
+                                    request.requestBody = formatted
+                                }
+                                .buttonStyle(.link)
+                                .font(.system(size: 10))
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
