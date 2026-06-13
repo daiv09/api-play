@@ -73,16 +73,6 @@ struct api_playApp: App {
             }
         }
         #endif
-
-        WindowGroup("Request Detail", id: "request-detail", for: APIRequest.ID.self) { $requestId in
-            if let id = requestId {
-                ResponseDetailView(requestId: id)
-                    .modelContainer(sharedModelContainer)
-                    .environment(aiCoordinator)
-            } else {
-                ContentUnavailableView("No Request Selected", systemImage: "tray")
-            }
-        }
         
         // MARK: - Visual Flow Builder
         WindowGroup("Visual Flow Builder", id: "visual-flow-builder") {

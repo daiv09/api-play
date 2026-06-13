@@ -3,6 +3,7 @@ import SwiftData
 import UniformTypeIdentifiers
 
 struct EditorView: View {
+    @Environment(AICoordinator.self) private var aiCoordinator
     @Bindable var request: APIRequest
     var environment: APIEnvironment?
     
@@ -78,8 +79,10 @@ struct EditorView: View {
             // ADD THIS MODIFIER HERE:
                 .sheet(isPresented: $showAgentConsole) {
                     AgentConsoleView(
-                        aiCoordinator: AICoordinator(), // Pass your instance here
-                        networkManager: network         // Use the @StateObject 'network' defined in EditorView
+                        aiCoordinator: aiCoordinator,
+                        networkManager: network,
+                        environment: environment,
+                        activeRequest: request
                     )
                 }
         }
@@ -108,9 +111,8 @@ struct EditorView: View {
                 showAgentConsole.toggle()
             } label: {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(.blue) // Changes the sparkles to native blue
             }
-            .buttonStyle(.bordered)
             .controlSize(.large)
             .help("Open AI Agent (Intent)")
 

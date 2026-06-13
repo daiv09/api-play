@@ -259,3 +259,24 @@ extension APIRequest {
         return current + " v2" // Default fallback
     }
 }
+
+// MARK: - APIResponse Helpers
+extension APIResponse {
+    var isJSON: Bool {
+        guard !body.isEmpty else { return false }
+        guard let data = body.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data)) != nil
+    }
+    
+    var hasHeaders: Bool {
+        !headers.isEmpty
+    }
+    
+    var hasBody: Bool {
+        !body.isEmpty || bodyData != nil
+    }
+    
+    var hasPreview: Bool {
+        !body.isEmpty || bodyData != nil
+    }
+}

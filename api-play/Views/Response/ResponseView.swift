@@ -68,6 +68,25 @@ struct ResponseView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onChange(of: viewMode) { _, _ in
+            isShowingHistory = false
+        }
+        .onChange(of: request.lastResponse) { _, newResponse in
+            if let response = newResponse {
+                let modes = availableModes(for: response)
+                if !modes.contains(viewMode), let firstMode = modes.first {
+                    viewMode = firstMode
+                }
+            }
+        }
+        .onAppear {
+            if let response = request.lastResponse {
+                let modes = availableModes(for: response)
+                if !modes.contains(viewMode), let firstMode = modes.first {
+                    viewMode = firstMode
+                }
+            }
+        }
     }
     
     private var historyToolbar: some View {
@@ -152,22 +171,23 @@ struct ResponseView: View {
 
         isAnalyzingVision = true
         
-        // 1. Capture context
-        let screenshot = capturePreviewSnapshot()
-        let currentURL = request.lastResponse?.url ?? "Unknown URL"
-        
-        // 2. Run Vision OCR
-        performVisionAnalysis(on: screenshot) { detectedText in
-            Task { @MainActor in
-                // 3. Update AI State
-                ai.analyzeVisualContext(
-                    text: detectedText,
-                    sourceURL: currentURL,
-                    image: screenshot
-                )
-                
-                isAnalyzingVision = false
-                isShowingAI = true
+        // 1. Capture context asynchronously (utilizing WKWebView's native snapshotting if available)
+        capturePreviewSnapshot { screenshot in
+            let currentURL = request.lastResponse?.url ?? "Unknown URL"
+            
+            // 2. Run Vision OCR
+            performVisionAnalysis(on: screenshot) { detectedText in
+                Task { @MainActor in
+                    // 3. Update AI State
+                    ai.analyzeVisualContext(
+                        text: detectedText,
+                        sourceURL: currentURL,
+                        image: screenshot
+                    )
+                    
+                    isAnalyzingVision = false
+                    isShowingAI = true
+                }
             }
         }
     }
@@ -194,7 +214,24 @@ struct ResponseView: View {
         }
     }
     
-    private func capturePreviewSnapshot() -> NSImage {
+    private func capturePreviewSnapshot(completion: @escaping (NSImage) -> Void) {
+        if let window = NSApplication.shared.windows.first,
+           let contentView = window.contentView,
+           let webView = findWebView(in: contentView) {
+            
+            webView.takeSnapshot(with: nil) { image, error in
+                if let image = image {
+                    completion(image)
+                } else {
+                    completion(captureFallbackSnapshot())
+                }
+            }
+        } else {
+            completion(captureFallbackSnapshot())
+        }
+    }
+    
+    private func captureFallbackSnapshot() -> NSImage {
         let view = NSApplication.shared.windows.first?.contentView
         let imageRep = view?.bitmapImageRepForCachingDisplay(in: view?.bounds ?? .zero)
         if let rep = imageRep {
@@ -204,6 +241,18 @@ struct ResponseView: View {
             return image
         }
         return NSImage()
+    }
+    
+    private func findWebView(in view: NSView) -> WKWebView? {
+        if let webView = view as? WKWebView {
+            return webView
+        }
+        for subview in view.subviews {
+            if let found = findWebView(in: subview) {
+                return found
+            }
+        }
+        return nil
     }
 
     // MARK: - Supporting Views (Kept for compatibility)
@@ -219,17 +268,17 @@ struct ResponseView: View {
             .font(.system(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(.secondary)
             Spacer()
+            let modes = availableModes(for: response)
             Picker("", selection: $viewMode) {
-                ForEach(ViewMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(modes, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
             }
-            .pickerStyle(.segmented).frame(width: 240).controlSize(.small)
+            .pickerStyle(.segmented)
+            .frame(width: CGFloat(modes.count * 60))
+            .controlSize(.small)
             Button { copyToClipboard(text: response.body) } label: { Image(systemName: "doc.on.doc") }
             .buttonStyle(.plain)
-            
-            Divider().frame(height: 12)
-            
-            CommitButtonView(request: request)
-                .buttonStyle(.plain)
             
             Divider().frame(height: 12)
             
@@ -300,6 +349,23 @@ struct ResponseView: View {
             }
             .buttonStyle(.link)
         }
+    }
+
+    private func availableModes(for response: APIResponse) -> [ViewMode] {
+        var modes: [ViewMode] = []
+        if response.isJSON {
+            modes.append(.json)
+        }
+        if response.hasBody {
+            modes.append(.raw)
+        }
+        if response.hasHeaders {
+            modes.append(.headers)
+        }
+        if response.hasPreview {
+            modes.append(.preview)
+        }
+        return modes
     }
 
     private func formatSize(_ bytes: Int) -> String { ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) }

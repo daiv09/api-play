@@ -60,8 +60,12 @@ struct MainView: View {
                                 .shadow(color: .black.opacity(0.15), radius: 15, x: -5, y: 5)
                                 .padding(.trailing, 10)
                                 .transition(.asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                    insertion: .move(edge: .trailing)
+                                        .combined(with: .opacity)
+                                        .animation(.spring(response: 0.38, dampingFraction: 0.78)),
+                                    removal: .move(edge: .trailing)
+                                        .combined(with: .opacity)
+                                        .animation(.easeInOut(duration: 0.22))
                                 ))
                             }
                         }
@@ -85,20 +89,18 @@ struct MainView: View {
             }
         }
         .toolbar {
-            // LEFT-HAND SIDE: Navigation, Sidebar Toggle, and Creation
-            ToolbarItemGroup(placement: .navigation) { 
+            // LEFT: Sidebar toggle + Create menu + AI Insights
+            ToolbarItemGroup(placement: .navigation) {
                 Menu {
                     Button {
-                        // Logic for New Request
                         let newRequest = APIRequest(name: "New Request")
                         modelContext.insert(newRequest)
-                        selectedRequest = newRequest // Automatically select the new one
+                        selectedRequest = newRequest
                     } label: {
                         Label("New Request", systemImage: "plus.circle")
                     }
 
                     Button {
-                        // Logic for New Folder
                         let newFolder = RequestFolder(name: "New Collection", order: 0)
                         modelContext.insert(newFolder)
                     } label: {
@@ -108,8 +110,6 @@ struct MainView: View {
                     Divider()
 
                     Button {
-                        // This triggers the alert/sheet logic you likely have in Sidebar
-                        // Or create a simple one directly:
                         let newEnv = APIEnvironment(name: "New Environment")
                         modelContext.insert(newEnv)
                         selectedEnvironment = newEnv
@@ -121,7 +121,6 @@ struct MainView: View {
                 }
                 .help("Create New...")
 
-                // 3. Tools
                 Button {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         showAIInsights.toggle()
@@ -132,13 +131,6 @@ struct MainView: View {
                 }
                 .keyboardShortcut("i", modifiers: .command)
                 .help("Toggle AI Insights")
-
-                Button {
-                    showWebhook.toggle()
-                } label: {
-                    Image(systemName: "network.badge.shield.half.filled")
-                }
-                .help("Local Webhook Receiver")
             }
 
             // CENTER: Environment Picker
@@ -154,22 +146,24 @@ struct MainView: View {
                 .frame(width: 180)
             }
 
-            // RIGHT: Status Actions
-            ToolbarItemGroup(placement: .status) {
+            // RIGHT: Webhook + Flow Builder
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    if let req = selectedRequest {
-                        openWindow(id: "request-detail", value: req.id)
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.8)) {
+                        showWebhook.toggle()
                     }
                 } label: {
-                    Image(systemName: "macwindow.badge.plus")
+                    Image(systemName: "network.badge.shield.half.filled")
+                        .symbolEffect(.pulse, isActive: showWebhook)
                 }
-                .disabled(selectedRequest == nil)
-                
+                .help("Local Webhook Receiver")
+
                 Button {
                     openWindow(id: "visual-flow-builder")
                 } label: {
                     Image(systemName: "point.3.connected.trianglepath.dotted")
                 }
+                .help("Visual Flow Builder")
             }
         }
         .background {
@@ -182,6 +176,17 @@ struct MainView: View {
         }
         .inspector(isPresented: $showWebhook) {
             WebhookView()
+        }
+        .onChange(of: selectedEnvironment) { _, newValue in
+            for env in environments {
+                env.isActive = (env.id == newValue?.id)
+            }
+            try? modelContext.save()
+        }
+        .onAppear {
+            if selectedEnvironment == nil {
+                selectedEnvironment = environments.first(where: { $0.isActive })
+            }
         }
     }
 }

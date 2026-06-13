@@ -97,22 +97,42 @@ struct SidebarView: View {
     }
 
     // MARK: - Subviews & Logic
-    private var environmentHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Label("Environment", systemImage: "server.rack").font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
-                Spacer()
-                if selectedEnvironment != nil {
-                    Button { isEditingEnv = true } label: { Image(systemName: "slider.horizontal.3") }.buttonStyle(.plain)
+        private var environmentHeader: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("Environment", systemImage: "server.rack")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    
+                    // This pushes everything following it to the extreme right edge
+                    Spacer()
+                    
+                    if selectedEnvironment != nil {
+                        Button {
+                            isEditingEnv = true
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Edit Environment Properties")
+                    }
                 }
+                // Explicitly set alignment to stretch across the full width
+                .frame(maxWidth: .infinity)
+                
+                Picker("", selection: $selectedEnvironment) {
+                    Text("Global").tag(Optional<APIEnvironment>.none)
+                    Divider()
+                    ForEach(environments) { Text($0.name).tag(Optional($0)) }
+                }
+                .labelsHidden()
+                .controlSize(.small)
             }
-            Picker("", selection: $selectedEnvironment) {
-                Text("Global").tag(Optional<APIEnvironment>.none)
-                Divider()
-                ForEach(environments) { Text($0.name).tag(Optional($0)) }
-            }.labelsHidden().controlSize(.small)
-        }.padding(12)
-    }
+            .padding(.horizontal, 16) // Increased slightly to align beautifully with native Lists
+            .padding(.vertical, 12)
+        }
 
     private var topLevelFolders: [RequestFolder] { folders.filter { $0.parent == nil }.sorted { $0.order < $1.order } }
     private var filteredRootRequests: [APIRequest] { searchText.isEmpty ? rootRequests : rootRequests.filter { $0.name.localizedCaseInsensitiveContains(searchText) } }
@@ -129,7 +149,12 @@ struct SidebarView: View {
 
     private func createEnvironment() {
         let env = APIEnvironment(name: newNameBuffer)
-        modelContext.insert(env); newNameBuffer = ""
+        modelContext.insert(env)
+        selectedEnvironment = env
+        for other in environments {
+            other.isActive = (other.id == env.id)
+        }
+        newNameBuffer = ""
     }
 
     private func deleteRootRequests(at offsets: IndexSet) {
