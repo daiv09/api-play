@@ -12,6 +12,9 @@ struct ResponseView: View {
     @Environment(AICoordinator.self) private var ai
     @State private var isShowingAI = false
     @State private var isAnalyzingVision = false
+    @State private var visualExplainCache: [CGFloat: String] = [:]
+    @State private var lastScrollY: CGFloat = 0
+    @State private var slideDirection: Edge = .trailing
 
     enum ViewMode: String, CaseIterable {
         case json = "JSON", raw = "Raw", headers = "Headers", preview = "Preview"
@@ -28,6 +31,10 @@ struct ResponseView: View {
                         CommitHistoryView(request: request) {
                             isShowingHistory = false
                         }
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .move(edge: .bottom).combined(with: .opacity)
+                        ))
                     } else {
                         ZStack {
                             Color(nsColor: .textBackgroundColor)
@@ -35,17 +42,40 @@ struct ResponseView: View {
                             switch viewMode {
                             case .json:
                                 jsonContentView(content: response.body)
+                                    .id(viewMode)
+                                    .transition(.asymmetric(
+                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                                    ))
                             case .raw:
                                 rawContentView(content: response.body)
+                                    .id(viewMode)
+                                    .transition(.asymmetric(
+                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                                    ))
                             case .headers:
                                 headersContentView(headers: response.headers)
+                                    .id(viewMode)
+                                    .transition(.asymmetric(
+                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                                    ))
                             case .preview:
                                 enhancedPreviewContent(for: response)
+                                    .id(viewMode)
+                                    .transition(.asymmetric(
+                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                                    ))
                             }
                         }
+                        .transition(.opacity)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.snappy(duration: 0.22, extraBounce: 0), value: viewMode)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isShowingHistory)
                 .inspector(isPresented: $isShowingAI) {
                     AIInspectorView(ai: ai, bodyText: response.body)
                         .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
@@ -68,16 +98,24 @@ struct ResponseView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .onChange(of: viewMode) { _, _ in
+        .onChange(of: viewMode) { oldValue, newValue in
             isShowingHistory = false
+            let oldIndex = ViewMode.allCases.firstIndex(of: oldValue) ?? 0
+            let newIndex = ViewMode.allCases.firstIndex(of: newValue) ?? 0
+            slideDirection = newIndex > oldIndex ? .trailing : .leading
         }
         .onChange(of: request.lastResponse) { _, newResponse in
+            visualExplainCache.removeAll()
             if let response = newResponse {
                 let modes = availableModes(for: response)
                 if !modes.contains(viewMode), let firstMode = modes.first {
                     viewMode = firstMode
                 }
             }
+        }
+        .onChange(of: request.id) { _, _ in
+            visualExplainCache.removeAll()
+            isShowingAI = false
         }
         .onAppear {
             if let response = request.lastResponse {
@@ -170,25 +208,60 @@ struct ResponseView: View {
         }
 
         isAnalyzingVision = true
-        
-        // 1. Capture context asynchronously (utilizing WKWebView's native snapshotting if available)
-        capturePreviewSnapshot { screenshot in
-            let currentURL = request.lastResponse?.url ?? "Unknown URL"
-            
-            // 2. Run Vision OCR
-            performVisionAnalysis(on: screenshot) { detectedText in
+
+        Task { @MainActor in
+            let currentScrollY = await getWebViewScrollY()
+            // Check cache
+            if let cachedEntry = visualExplainCache.first(where: { abs($0.key - currentScrollY) < 5 }) {
+                let currentURL = request.lastResponse?.url ?? "Unknown URL"
                 Task { @MainActor in
-                    // 3. Update AI State
                     ai.analyzeVisualContext(
-                        text: detectedText,
+                        text: cachedEntry.value,
                         sourceURL: currentURL,
-                        image: screenshot
+                        image: NSImage()
                     )
-                    
                     isAnalyzingVision = false
                     isShowingAI = true
                 }
+                return
             }
+
+            // 1. Capture context asynchronously
+            capturePreviewSnapshot { screenshot in
+                let currentURL = request.lastResponse?.url ?? "Unknown URL"
+                
+                // 2. Run Vision OCR
+                performVisionAnalysis(on: screenshot) { detectedText in
+                    Task { @MainActor in
+                        // 3. Update AI State
+                        ai.analyzeVisualContext(
+                            text: detectedText,
+                            sourceURL: currentURL,
+                            image: screenshot
+                        )
+                        
+                        isAnalyzingVision = false
+                        isShowingAI = true
+                        visualExplainCache[currentScrollY] = detectedText
+                    }
+                }
+            }
+        }
+    }
+    
+    @MainActor
+    private func getWebViewScrollY() async -> CGFloat {
+        guard let window = NSApplication.shared.windows.first,
+              let contentView = window.contentView,
+              let webView = findWebView(in: contentView) else {
+            return 0
+        }
+
+        do {
+            let result = try await webView.evaluateJavaScript("window.pageYOffset")
+            return CGFloat((result as? NSNumber)?.floatValue ?? 0)
+        } catch {
+            return 0
         }
     }
 
@@ -306,16 +379,93 @@ struct ResponseView: View {
         .background(color.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
+    private func formattedJSON(_ content: String) -> String {
+        guard let data = content.data(using: .utf8),
+              let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []),
+              // .prettyPrinted ensures structured indentation for JSON
+              let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
+              let prettyString = String(data: prettyData, encoding: .utf8) else {
+            return content
+        }
+        return prettyString
+    }
+
+    private func formattedRaw(_ content: String) -> String {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // If the content is HTML or XML, apply a clean structural indentation parser
+        if trimmed.hasPrefix("<") && trimmed.hasSuffix(">") {
+            return formatHTML(trimmed)
+        }
+        return content
+    }
+
+    // Helper to manually parse and indent XML/HTML content neatly line-by-line
+    private func formatHTML(_ html: String) -> String {
+        // Standardize spacing between closing and opening tags
+        let cleanHTML = html.replacingOccurrences(of: ">\\s*<", with: "><", options: .regularExpression)
+        
+        var formatted = ""
+        var indentLevel = 0
+        let indentString = "    " // 4 spaces per indentation level
+        
+        var i = cleanHTML.startIndex
+        while i < cleanHTML.endIndex {
+            if cleanHTML[i] == "<" {
+                // Find the full tag component block
+                guard let closingBracketIndex = cleanHTML[i...].firstIndex(of: ">") else {
+                    formatted.append(String(cleanHTML[i...]))
+                    break
+                }
+                
+                let tag = String(cleanHTML[i...closingBracketIndex])
+                
+                if tag.hasPrefix("</") {
+                    // It's a closing tag: step backward first, then add the line
+                    indentLevel = max(0, indentLevel - 1)
+                    formatted.append("\n" + String(repeating: indentString, count: indentLevel) + tag)
+                } else if tag.hasSuffix("/>") || tag.hasPrefix("<!") || tag.hasPrefix("<?") {
+                    // Self-closing tags, comments, or doctypes don't change indentation depth
+                    formatted.append("\n" + String(repeating: indentString, count: indentLevel) + tag)
+                } else {
+                    // Opening tag: indent and step forward for subsequent tags
+                    formatted.append("\n" + String(repeating: indentString, count: indentLevel) + tag)
+                    indentLevel += 1
+                }
+                
+                i = cleanHTML.index(after: closingBracketIndex)
+            } else {
+                // Read inner text until the next tag starts
+                let nextBracketIndex = cleanHTML[i...].firstIndex(of: "<") ?? cleanHTML.endIndex
+                let text = cleanHTML[i..<nextBracketIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if !text.isEmpty {
+                    formatted.append("\n" + String(repeating: indentString, count: indentLevel) + text)
+                }
+                i = nextBracketIndex
+            }
+        }
+        
+        return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func jsonContentView(content: String) -> some View {
         ScrollView {
-            Text(content).font(.system(size: 12, design: .monospaced))
-                .padding(16).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+            // Pass the string through your formattedJSON helper function
+            Text(formattedJSON(content))
+                .font(.system(size: 12, design: .monospaced))
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 
     private func rawContentView(content: String) -> some View {
-        TextEditor(text: .constant(content)).font(.system(size: 12, design: .monospaced))
-            .scrollContentBackground(.hidden).padding(8)
+        // Pass the string through your formattedRaw helper function
+        TextEditor(text: .constant(formattedRaw(content)))
+            .font(.system(size: 12, design: .monospaced))
+            .scrollContentBackground(.hidden)
+            .padding(8)
     }
 
     private func headersContentView(headers: [String: String]) -> some View {
@@ -325,7 +475,6 @@ struct ResponseView: View {
                     Text(key).font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary).frame(width: 140, alignment: .leading)
                     Text(value).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                 }
-                Divider()
             }
         }.listStyle(.inset)
     }

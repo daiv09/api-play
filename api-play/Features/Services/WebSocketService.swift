@@ -61,7 +61,7 @@ class WebSocketService {
             if let error = error {
                 print("❌ WebSocket Send Error: \(error.localizedDescription)")
             } else {
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     self?.messages.append(WebSocketMessage(content: text, isOutgoing: true))
                 }
             }
@@ -75,23 +75,23 @@ class WebSocketService {
             
             switch result {
             case .failure(let error):
-                Task { @MainActor in
-                    self.status = .error(error.localizedDescription)
-                    self.isConnected = false
+                Task { @MainActor [weak self] in
+                    self?.status = .error(error.localizedDescription)
+                    self?.isConnected = false
                 }
                 print("❌ WebSocket Receive Error: \(error)")
                 
             case .success(let message):
                 switch message {
                 case .string(let text):
-                    Task { @MainActor in
-                        self.messages.append(WebSocketMessage(content: text, isOutgoing: false))
+                    Task { @MainActor [weak self] in
+                        self?.messages.append(WebSocketMessage(content: text, isOutgoing: false))
                     }
                 case .data(let data):
                     // Handle binary data if necessary
                     if let text = String(data: data, encoding: .utf8) {
-                        Task { @MainActor in
-                            self.messages.append(WebSocketMessage(content: text, isOutgoing: false))
+                        Task { @MainActor [weak self] in
+                            self?.messages.append(WebSocketMessage(content: text, isOutgoing: false))
                         }
                     }
                 @unknown default:

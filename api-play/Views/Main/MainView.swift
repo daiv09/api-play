@@ -18,6 +18,7 @@ struct MainView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showCommandPalette = false
     @State private var showWebhook = false
+    @State private var showCodeGen = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -26,66 +27,119 @@ struct MainView: View {
                 selectedRequest: $selectedRequest,
                 selectedEnvironment: $selectedEnvironment
             )
-            .navigationSplitViewColumnWidth(min: 250, ideal: 280, max: 350)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 320)
             
         } detail: {
             // MAIN CONTENT AREA
-            if let request = selectedRequest {
-                HStack(spacing: 0) {
-                    // LEFT SIDE: Editor and Response
-                    VSplitView {
-                        EditorView(request: request, environment: selectedEnvironment) { response in
-                            request.lastResponse = response
-                            request.updatedAt = Date()
-                            try? modelContext.save()
-                        }
-                        .frame(minHeight: 200, maxHeight: .infinity)
-
-                        ZStack(alignment: .trailing) {
-                            ResponseView(request: request)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            
-                            if showAIInsights {
-                                AIInspectorView(
-                                    ai: aiCoordinator,
-                                    bodyText: request.lastResponse?.body ?? "No response available."
-                                )
-                                .frame(width: 320)
-                                .background(.ultraThinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                                )
-                                .shadow(color: .black.opacity(0.15), radius: 15, x: -5, y: 5)
-                                .padding(.trailing, 10)
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .trailing)
-                                        .combined(with: .opacity)
-                                        .animation(.spring(response: 0.38, dampingFraction: 0.78)),
-                                    removal: .move(edge: .trailing)
-                                        .combined(with: .opacity)
-                                        .animation(.easeInOut(duration: 0.22))
-                                ))
+            Group {
+                if let request = selectedRequest {
+                    HStack(spacing: 0) {
+                        // LEFT SIDE: Editor and Response
+                        VSplitView {
+                            EditorView(request: request, environment: selectedEnvironment) { response in
+                                request.lastResponse = response
+                                request.updatedAt = Date()
+                                try? modelContext.save()
                             }
-                        }
-                        .frame(minHeight: 250, maxHeight: .infinity)
-                    }
-                    .frame(maxWidth: .infinity)
+                            .frame(minHeight: 200, maxHeight: .infinity)
 
-                    CodeGenView(request: request)
-                        .frame(width: 350)
-                        .background(Color(nsColor: .windowBackgroundColor))
+                            ZStack(alignment: .trailing) {
+                                ResponseView(request: request)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                
+                                if showAIInsights {
+                                    AIInspectorView(
+                                        ai: aiCoordinator,
+                                        bodyText: request.lastResponse?.body ?? "No response available."
+                                    )
+                                    .frame(width: 320)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                                    .shadow(color: .black.opacity(0.15), radius: 15, x: -5, y: 5)
+                                    .padding(.trailing, 10)
+                                    .transition(.asymmetric(
+                                        insertion: .move(edge: .trailing)
+                                            .combined(with: .opacity)
+                                            .animation(.spring(response: 0.38, dampingFraction: 0.78)),
+                                        removal: .move(edge: .trailing)
+                                            .combined(with: .opacity)
+                                            .animation(.easeInOut(duration: 0.22))
+                                    ))
+                                }
+                            }
+                            .frame(minHeight: 250, maxHeight: .infinity)
+                        }
+                        .frame(minWidth: 600, idealWidth: 800, maxWidth: .infinity)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .trailing)),
+                        removal: .opacity
+                    ))
+                } else {
+                    ContentUnavailableView(
+                        "Select a Request",
+                        systemImage: "tray.fill",
+                        description: Text("Choose a request from the sidebar to start debugging.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: selectedRequest)
+            .frame(minWidth: 600, idealWidth: 800, maxWidth: .infinity)
+        }
+        .navigationSplitViewStyle(.balanced)
+        .inspector(isPresented: $showCodeGen) {
+            if let request = selectedRequest {
+                CodeGenView(request: request)
+                    .inspectorColumnWidth(min: 250, ideal: 350, max: 500)
             } else {
-                ContentUnavailableView(
-                    "Select a Request",
-                    systemImage: "tray.fill",
-                    description: Text("Choose a request from the sidebar to start debugging.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text("Select a Request")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .safeAreaPadding(.top)
+        .background {
+            Button("") { showCommandPalette.toggle() }
+                .keyboardShortcut("k", modifiers: .command)
+                .opacity(0)
+        }
+        .sheet(isPresented: $showCommandPalette) {
+            CommandPaletteView().frame(width: 500, height: 400)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: Notification.Name("SelectRequestInMainView")
+            )
+        ) { notification in
+            if let request = notification.object as? APIRequest {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    selectedRequest = request
+                }
+            }
+        }
+        .inspector(isPresented: $showWebhook) {
+            WebhookView()
+        }
+        .onChange(of: selectedEnvironment) { _, newValue in
+            for env in environments {
+                env.isActive = (env.id == newValue?.id)
+            }
+            try? modelContext.save()
+        }
+        .onAppear {
+            if selectedEnvironment == nil {
+                selectedEnvironment = environments.first(where: { $0.isActive })
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerCommandPalette"))) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                showCommandPalette = true
             }
         }
         .toolbar {
@@ -133,8 +187,8 @@ struct MainView: View {
                 .help("Toggle AI Insights")
             }
 
-            // CENTER: Environment Picker
-            ToolbarItem(placement: .principal) {
+            // RIGHT: Environment Picker + Webhook + Flow Builder
+            ToolbarItemGroup(placement: .primaryAction) {
                 Picker("Environment", selection: $selectedEnvironment) {
                     Text("No Environment").tag(Optional<APIEnvironment>.none)
                     Divider()
@@ -143,11 +197,8 @@ struct MainView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(width: 180)
-            }
+                .frame(width: 150)
 
-            // RIGHT: Webhook + Flow Builder
-            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.8)) {
                         showWebhook.toggle()
@@ -166,6 +217,7 @@ struct MainView: View {
                 .help("Visual Flow Builder")
             }
         }
+        .safeAreaPadding(.top)
         .background {
             Button("") { showCommandPalette.toggle() }
                 .keyboardShortcut("k", modifiers: .command)
@@ -211,6 +263,11 @@ struct MainView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerCommandPalette"))) { _ in
             self.showCommandPalette = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleCodeGenSidebar"))) { _ in
+            withAnimation(.spring(response: 0.36, dampingFraction: 0.8)) {
+                self.showCodeGen.toggle()
+            }
         }
     }
 }

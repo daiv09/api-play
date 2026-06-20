@@ -67,6 +67,7 @@ struct SidebarView: View {
                 Text(imageDropError ?? "")
             }
             .listStyle(.sidebar)
+            .environment(\.controlActiveState, .active) // Keeps selection highlight constantly blue when window loses focus
             .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                 if handleImageDrop(providers: providers) { return true }
                 if handleFileDrop(providers: providers) { return true }
@@ -103,33 +104,18 @@ struct SidebarView: View {
                 }.frame(minWidth: 500, minHeight: 400)
             }
         }
+        .frame(minWidth: 200, idealWidth: 260, maxWidth: 320)
     }
 
     // MARK: - Subviews & Logic
         private var environmentHeader: some View {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Label("Environment", systemImage: "server.rack")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-                    
-                    // This pushes everything following it to the extreme right edge
-                    Spacer()
-                    
-                    if selectedEnvironment != nil {
-                        Button {
-                            isEditingEnv = true
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Edit Environment Properties")
-                    }
-                }
-                // Explicitly set alignment to stretch across the full width
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 6) {
+                Label("Environment", systemImage: "server.rack")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                
+                // This pushes everything following it to the extreme right edge
+                Spacer()
                 
                 Picker("", selection: $selectedEnvironment) {
                     Text("Global").tag(Optional<APIEnvironment>.none)
@@ -138,9 +124,22 @@ struct SidebarView: View {
                 }
                 .labelsHidden()
                 .controlSize(.small)
+
+                if selectedEnvironment != nil {
+                    Button {
+                        isEditingEnv = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit Environment Properties")
+                }
             }
-            .padding(.horizontal, 16) // Increased slightly to align beautifully with native Lists
-            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .frame(height: 38, alignment: .center)
+            .padding(.vertical, 10)
         }
 
     private var topLevelFolders: [RequestFolder] { folders.filter { $0.parent == nil }.sorted { $0.order < $1.order } }
@@ -187,18 +186,14 @@ struct SidebarView: View {
                     return
                 }
                 let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
-                Task {
-                    defer { DispatchQueue.main.async { isProcessingImage = false } }
+                Task { @MainActor in
+                    defer { isProcessingImage = false }
                     do {
                         let newReq = try await aiCoordinator.parseImageToRequest(text: text)
-                        await MainActor.run {
-                            modelContext.insert(newReq)
-                            selectedRequest = newReq
-                        }
+                        modelContext.insert(newReq)
+                        selectedRequest = newReq
                     } catch {
-                        await MainActor.run {
-                            imageDropError = "Couldn't import this image: \(error.localizedDescription)"
-                        }
+                        imageDropError = "Couldn't import this image: \(error.localizedDescription)"
                     }
                 }
             }
@@ -402,6 +397,7 @@ struct FolderDisclosure: View {
         }
     }
 
+    @discardableResult
     private func handleDrop(items: [String]) -> Bool {
         guard let idString = items.first, let uuid = UUID(uuidString: idString) else { return false }
         let descriptor = FetchDescriptor<APIRequest>(predicate: #Predicate { $0.id == uuid })
@@ -427,10 +423,14 @@ struct RequestRow: View {
                 .frame(width: 38, alignment: .leading)
 
             if isRenaming {
-                TextField("", text: $request.name).textFieldStyle(.plain).focused($isFocused).onSubmit { onRenameComplete() }
+                TextField("", text: $request.name)
+                    .textFieldStyle(.plain)
+                    .focused($isFocused)
+                    .onSubmit { onRenameComplete() }
             } else {
                 Text(request.name.isEmpty ? "Untitled Request" : request.name)
-                    .lineLimit(1).font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                    .lineLimit(1)
+                    .font(.system(size: 12, weight: isSelected ? .medium : .regular))
                     .foregroundStyle(isSelected ? .white : .primary)
                 
                 if let version = request.version, !version.isEmpty {
@@ -443,24 +443,36 @@ struct RequestRow: View {
                         .cornerRadius(4)
                 }
             }
+            
             Spacer()
+            
             if request.hasDrifted {
-                Circle().fill(.orange).frame(width: 6, height: 6)
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 6, height: 6)
             }
+            
             if request.isFavorite {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 8))
-                    .foregroundStyle(isSelected ? .white : .blue) // Corrected color logic
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9))
+                    .rotationEffect(.degrees(35))
+                    .foregroundStyle(isSelected ? .white : .secondary.opacity(0.8))
+                    .transition(.scale.combined(with: .opacity))
             }
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onChange(of: isRenaming) { if $1 { isFocused = true } }
+        .animation(.easeOut(duration: 0.15), value: request.isFavorite)
     }
 
     private var methodColor: Color {
         switch request.httpMethod {
-        case .GET: return .green; case .POST: return .orange; case .PUT: return .blue; case .DELETE: return .red; default: return .secondary
+        case .GET: return .green
+        case .POST: return .orange
+        case .PUT: return .blue
+        case .DELETE: return .red
+        default: return .secondary
         }
     }
 }

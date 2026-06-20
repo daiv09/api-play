@@ -12,6 +12,7 @@ struct EditorView: View {
     @StateObject private var network = NetworkManager()
     var onResponseReceived: ((APIResponse) -> Void)?
     @State private var selectedTab: EditorTab = .params
+    @State private var slideDirection: Edge = .trailing
 
     enum EditorTab: String, CaseIterable {
         case params = "Params"
@@ -23,28 +24,23 @@ struct EditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             // 🔹 URL & METHOD BAR
-            VStack(spacing: 0) {
+            HStack(spacing: 12) {
                 // Type Switcher (REST vs GraphQL)
-                HStack {
-                    Picker("", selection: $request.requestType) {
-                        Text("REST").tag(RequestType.rest)
-                        Text("GraphQL").tag(RequestType.graphql)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 160)
-                    
-                    Spacer()
+                Picker("", selection: $request.requestType) {
+                    Text("REST").tag(RequestType.rest)
+                    Text("GraphQL").tag(RequestType.graphql)
                 }
-                .padding(.top, 12)
-                .padding(.horizontal, 16)
+                .pickerStyle(.segmented)
+                .frame(width: 140)
                 
                 urlBar
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                
-                Divider()
             }
+            .padding(.horizontal, 16)
+            .frame(height: 38, alignment: .center)
+            .padding(.vertical, 10)
             .background(.ultraThinMaterial)
+            
+            Divider()
 
             // 🔹 TAB NAVIGATION
             HStack {
@@ -71,11 +67,19 @@ struct EditorView: View {
                         query: $request.graphqlQuery,
                         variables: $request.graphqlVariables
                     )
+                    .transition(.opacity)
                 } else {
                     restContent
+                        .id(selectedTab)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: slideDirection).combined(with: .opacity),
+                            removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                        ))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.snappy(duration: 0.22, extraBounce: 0), value: selectedTab)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: request.requestType)
             // ADD THIS MODIFIER HERE:
                 .sheet(isPresented: $showAgentConsole) {
                     AgentConsoleView(
@@ -95,6 +99,11 @@ struct EditorView: View {
             Button("OK", role: .cancel) { network.error = nil }
         } message: {
             Text(network.error?.localizedDescription ?? "An unknown error occurred.")
+        }
+        .onChange(of: selectedTab) { oldValue, newValue in
+            let oldIndex = EditorTab.allCases.firstIndex(of: oldValue) ?? 0
+            let newIndex = EditorTab.allCases.firstIndex(of: newValue) ?? 0
+            slideDirection = newIndex > oldIndex ? .trailing : .leading
         }
 
     }
@@ -129,19 +138,21 @@ struct EditorView: View {
             Button {
                 Task { await runRequest() }
             } label: {
-                HStack {
+                HStack(spacing: 6) {
                     if network.isLoading {
-                        ProgressView().controlSize(.small)
+                        ProgressView()
+                            .controlSize(.small)
                     } else {
-                        Image(systemName: "play.fill")
+                        Image(systemName: "paperplane.fill")
                     }
-                    Text("Send")
+                    Text(network.isLoading ? "Sending..." : "Send")
                 }
-                .frame(width: 70)
+                .frame(width: network.isLoading ? 95 : 70)
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(network.isLoading)
+            .animation(.snappy(duration: 0.2), value: network.isLoading)
             
             Button {
                 request.updatedAt = Date()
@@ -156,6 +167,15 @@ struct EditorView: View {
             CommitButtonView(request: request)
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+            
+            Button {
+                NotificationCenter.default.post(name: Notification.Name("ToggleCodeGenSidebar"), object: nil)
+            } label: {
+                Image(systemName: "sidebar.trailing")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .help("Toggle Code Snippet Sidebar")
         }
     }
     // MARK: - Tab Router

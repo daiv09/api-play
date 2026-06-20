@@ -21,7 +21,8 @@ struct CodeGenView: View {
             // 🔹 ADAPTIVE HEADER
             headerSection
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .frame(height: 38, alignment: .center)
+                .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
 
             Divider()
@@ -62,23 +63,25 @@ struct CodeGenView: View {
         }
         // Set a reasonable minimum width to prevent UI collapse
         .frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: request.lastResponse) { _, newValue in
+            if newValue != nil && selectedLang == .swiftModel {
+                Task { await generateSwiftModels() }
+            }
+        }
+        .onChange(of: selectedLang) { _, newValue in
+            if newValue == .swiftModel && swiftModelResult.isEmpty && request.lastResponse != nil {
+                Task { await generateSwiftModels() }
+            }
+        }
     }
 
     // MARK: - Subviews
     
     private var headerSection: some View {
-        // Switch between HStack and VStack based on width
-        ViewThatFits(in: .horizontal) {
-            HStack {
-                headerLabel
-                Spacer(minLength: 20)
-                languagePicker.frame(width: 220)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                headerLabel
-                languagePicker.frame(maxWidth: .infinity)
-            }
+        HStack {
+            headerLabel
+            Spacer(minLength: 20)
+            languagePicker.frame(width: 220)
         }
     }
 
@@ -128,35 +131,24 @@ struct CodeGenView: View {
 
     private var swiftModelToolbar: some View {
         HStack {
-            Button(action: { Task { await generateSwiftModels() } }) {
-                Label(swiftModelResult.isEmpty ? "Generate Models" : "Regenerate",
-                      systemImage: "wand.and.stars")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.purple)
-            .controlSize(.small)
-            .disabled(isGeneratingSwiftModel || request.lastResponse == nil)
-
             if isGeneratingSwiftModel {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
-            }
-            
-            if request.lastResponse == nil {
-                Text("⚠️ Send request first")
+                Text("Generating Swift Models...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if request.lastResponse == nil {
+                Text("⚠️ Send request first to auto-generate models")
                     .font(.caption)
                     .foregroundStyle(.orange)
-            }
-
-            Spacer()
-            
-            if !swiftModelResult.isEmpty {
-                Button("Clear") { swiftModelResult = "" }
-                    .buttonStyle(.link)
+            } else {
+                Label("AI Auto-Generated Models", systemImage: "sparkles")
                     .font(.caption)
+                    .foregroundStyle(.blue)
             }
+            Spacer()
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 11)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
@@ -212,7 +204,7 @@ struct CodeGenView: View {
 
     private func displayContent() -> String {
         if selectedLang == .swiftModel {
-            return swiftModelResult.isEmpty ? "// Click 'Generate Models' to create Decodable structs using Apple Intelligence." : swiftModelResult
+            return swiftModelResult.isEmpty ? "// Swift Models will be generated here automatically when a response is received." : swiftModelResult
         }
         return schemaResult.isEmpty ? generateCode() : schemaResult
     }

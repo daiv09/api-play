@@ -21,7 +21,7 @@ struct APIRequestEntity: AppEntity {
 
 struct APIRequestQuery: EntityQuery {
     func entities(for identifiers: [APIRequestEntity.ID]) async throws -> [APIRequestEntity] {
-        let modelContainer = SharedContainer.shared
+        let modelContainer = await SharedContainer.shared
         let context = ModelContext(modelContainer)
         let descriptor = FetchDescriptor<APIRequest>(predicate: #Predicate { identifiers.contains($0.id) })
         let requests = try context.fetch(descriptor)
@@ -29,7 +29,7 @@ struct APIRequestQuery: EntityQuery {
     }
     
     func suggestedEntities() async throws -> [APIRequestEntity] {
-        let modelContainer = SharedContainer.shared
+        let modelContainer = await SharedContainer.shared
         let context = ModelContext(modelContainer)
         let descriptor = FetchDescriptor<APIRequest>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
         let requests = try context.fetch(descriptor)

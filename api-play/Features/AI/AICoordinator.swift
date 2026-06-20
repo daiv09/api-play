@@ -341,11 +341,11 @@ class AICoordinator {
     /// Analyzes the API response body using on-device Apple Intelligence.
     func explainResponse(_ body: String) async {
         guard SystemLanguageModel.default.isAvailable else {
-            await updateAnalysis("Apple Intelligence is still downloading or unavailable on this device.")
+            updateAnalysis("Apple Intelligence is still downloading or unavailable on this device.")
             return
         }
 
-        await startAnalysis()
+        startAnalysis()
         
         let maxCharacters = 2000
         let isTruncated = body.count > maxCharacters
@@ -364,9 +364,9 @@ class AICoordinator {
             """
             
             let response = try await session.respond(to: prompt)
-            await finishAnalysis(with: response.content)
+            finishAnalysis(with: response.content)
         } catch {
-            await finishAnalysis(with: "### AI Error\n\(error.localizedDescription)")
+            finishAnalysis(with: "### AI Error\n\(error.localizedDescription)")
         }
     }
     
@@ -415,11 +415,11 @@ class AICoordinator {
     func analyzeVisualContext(text: String, sourceURL: String, image: NSImage) {
         Task {
             guard !text.isEmpty else {
-                await updateAnalysis("The visual scan completed, but no readable text was identified.")
+                updateAnalysis("The visual scan completed, but no readable text was identified.")
                 return
             }
             
-            await startAnalysis()
+            startAnalysis()
             
             do {
                 let session = LanguageModelSession()
@@ -439,16 +439,16 @@ class AICoordinator {
                 """
                 
                 let response = try await session.respond(to: prompt)
-                await finishAnalysis(with: "**Visual Interpretation:**\n\n\(response.content)")
+                finishAnalysis(with: "**Visual Interpretation:**\n\n\(response.content)")
                 
             } catch {
                 // Fallback: If the AI fails, show the raw OCR data
-                await finishAnalysis(with: "**Raw Visual Data (OCR):**\n\n\(text)\n\n*Source: \(sourceURL)*")
+                finishAnalysis(with: "**Raw Visual Data (OCR):**\n\n\(text)\n\n*Source: \(sourceURL)*")
             }
         }
     }
     
-    /// Parses OCR text from a screenshot into an APIRequest using Apple Intelligence
+    @MainActor
     func parseImageToRequest(text: String) async throws -> APIRequest {
         guard SystemLanguageModel.default.isAvailable else {
             throw NSError(domain: "AICoordinator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Apple Intelligence is unavailable."])

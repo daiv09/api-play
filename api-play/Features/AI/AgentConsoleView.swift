@@ -64,7 +64,7 @@ struct AgentConsoleView: View {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
-                        .padding(.top, 10)
+                        .padding(.vertical, 10)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {

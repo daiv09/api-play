@@ -56,7 +56,7 @@ struct QuickRequestView: View {
             if isExecuting {
                 ProgressView()
                     .scaleEffect(0.8)
-                    .padding(.top, 10)
+                    .padding(.vertical, 10)
             }
             
             // Error Banner

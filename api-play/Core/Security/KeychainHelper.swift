@@ -22,7 +22,7 @@ struct KeychainHelper {
         guard let data = value.data(using: .utf8) else { return false }
 
         // Attempt to update first; if not found, add.
-        var updateQuery: [CFString: Any] = [
+        let updateQuery: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: key
@@ -42,7 +42,7 @@ struct KeychainHelper {
     // MARK: - Read
 
     static func read(forKey key: String) -> String? {
-        var query: [CFString: Any] = [
+        let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: key,
@@ -60,7 +60,7 @@ struct KeychainHelper {
 
     @discardableResult
     static func delete(forKey key: String) -> Bool {
-        var query: [CFString: Any] = [
+        let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: key
