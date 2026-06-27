@@ -27,7 +27,9 @@ struct EnvironmentEditor: View {
                             systemImage: "bolt.fill",
                             description: Text("Add variables to use them in your requests as {{key}}")
                         )
-                        .frame(height: 200)
+                        .padding()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center) // 👈 Completely centers it across the available viewport area
+                        .listRowBackground(Color.clear) // 👈 Optional: Hides list backgrounds if this view lives inside a List section
                     }
                 }
             }

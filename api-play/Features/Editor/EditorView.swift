@@ -8,6 +8,7 @@ struct EditorView: View {
     var environment: APIEnvironment?
     
     @State private var showAgentConsole = false // Controls the sheet
+    @State private var showCodeGenSheet = false // Controls the CodeGen sheet
 
     @StateObject private var network = NetworkManager()
     var onResponseReceived: ((APIResponse) -> Void)?
@@ -89,6 +90,25 @@ struct EditorView: View {
                         activeRequest: request
                     )
                 }
+                .sheet(isPresented: $showCodeGenSheet) {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Code Snippets & Models")
+                                .font(.headline)
+                            Spacer()
+                            Button("Close") {
+                                showCodeGenSheet = false
+                            }
+                            .keyboardShortcut(.escape, modifiers: [])
+                        }
+                        .padding()
+                        
+                        Divider()
+                        
+                        CodeGenView(request: request)
+                    }
+                    .frame(minWidth: 600, minHeight: 500)
+                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Network error alert
@@ -169,13 +189,13 @@ struct EditorView: View {
                 .controlSize(.large)
             
             Button {
-                NotificationCenter.default.post(name: Notification.Name("ToggleCodeGenSidebar"), object: nil)
+                showCodeGenSheet = true
             } label: {
-                Image(systemName: "sidebar.trailing")
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
-            .help("Toggle Code Snippet Sidebar")
+            .help("Show Code Snippets")
         }
     }
     // MARK: - Tab Router
@@ -205,58 +225,137 @@ struct EditorView: View {
 struct KVPairEditor: View {
     @Binding var pairs: [KVPair]
     let title: String
+    
+    @State private var showPastePopover = false
+    @State private var bulkText = ""
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header with bulk actions
+            HStack {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                
+                if !pairs.isEmpty {
+                    Button("Clear All", role: .destructive) {
+                        withAnimation {
+                            pairs.removeAll()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.trailing, 8)
+                }
+                
+                Button("Paste Raw") {
+                    showPastePopover.toggle()
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+                .popover(isPresented: $showPastePopover, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Paste Raw \(title)")
+                            .font(.headline)
+                        Text("Paste text formatted as 'Key: Value' on each line.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        TextEditor(text: $bulkText)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(width: 300, height: 150)
+                            .padding(4)
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2)))
+                        
+                        HStack {
+                            Spacer()
+                            Button("Cancel") { showPastePopover = false }
+                                .keyboardShortcut(.escape, modifiers: [])
+                            Button("Import") {
+                                parseBulkText()
+                                showPastePopover = false
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .windowBackgroundColor))
+            
+            Divider()
+
             if pairs.isEmpty {
                 ContentUnavailableView {
                     Label("No \(title)", systemImage: title.contains("Header") ? "list.bullet.rectangle" : "text.badge.plus")
                 } description: {
-                    Text("Add key-value pairs to customize your \(requestName).")
+                    Text("Add key-value pairs or paste raw text to customize your \(requestName).")
                 } actions: {
                     Button("Add Row") {
-                        pairs.append(KVPair(key: "", value: ""))
+                        withAnimation {
+                            pairs.append(KVPair(key: "", value: ""))
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                 }
             } else {
                 List {
                     ForEach($pairs) { $pair in
-                        HStack {
+                        HStack(spacing: 12) {
                             Toggle("", isOn: $pair.isEnabled)
                                 .toggleStyle(.checkbox)
                                 .labelsHidden()
                             
                             TextField("Key", text: $pair.key)
                                 .textFieldStyle(.plain)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(maxWidth: .infinity)
                             
-                            Divider().frame(height: 12)
+                            Divider().frame(height: 16)
                             
                             TextField("Value", text: $pair.value)
                                 .textFieldStyle(.plain)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(maxWidth: .infinity)
                             
                             Button {
-                                pairs.removeAll { $0.id == pair.id }
+                                withAnimation {
+                                    pairs.removeAll { $0.id == pair.id }
+                                }
                             } label: {
-                                Image(systemName: "minus.circle")
-                                    .foregroundColor(.secondary)
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red.opacity(0.7))
                             }
                             .buttonStyle(.plain)
                         }
-                        .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                        .cornerRadius(6)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                        .listRowSeparator(.hidden)
                     }
                     
                     Button {
-                        pairs.append(KVPair(key: "", value: ""))
+                        withAnimation {
+                            pairs.append(KVPair(key: "", value: ""))
+                        }
                     } label: {
                         Label("Add Row", systemImage: "plus")
-                            .font(.caption)
+                            .font(.caption.bold())
                             .padding(.leading, 4)
+                            .padding(.vertical, 4)
                     }
                     .buttonStyle(.plain)
+                    .foregroundStyle(.blue)
                 }
-                .listStyle(.bordered)
+                .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .background(Color(nsColor: .textBackgroundColor))
             }
         }
     }
@@ -264,20 +363,103 @@ struct KVPairEditor: View {
     private var requestName: String {
         title.lowercased().contains("header") ? "headers" : "parameters"
     }
+    
+    private func parseBulkText() {
+        let lines = bulkText.components(separatedBy: .newlines)
+        var newPairs: [KVPair] = []
+        for line in lines {
+            let parts = line.split(separator: ":", maxSplits: 1)
+            if parts.count == 2 {
+                let key = String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let value = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !key.isEmpty {
+                    newPairs.append(KVPair(key: key, value: value))
+                }
+            } else if parts.count == 1 {
+                let key = String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !key.isEmpty {
+                    newPairs.append(KVPair(key: key, value: ""))
+                }
+            }
+        }
+        if !newPairs.isEmpty {
+            withAnimation {
+                pairs.append(contentsOf: newPairs)
+            }
+        }
+        bulkText = ""
+    }
 }
 
 struct BodyEditorView: View {
     @Bindable var request: APIRequest
     
+    // Quick helper array
+    let contentTypes = ["application/json", "application/xml", "application/x-www-form-urlencoded", "text/plain"]
+    @State private var copyBannerText: String? = nil
+
     var body: some View {
-            VStack(alignment: .leading, spacing: 0) {
-                TextEditor(text: $request.requestBody)
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity) // 🔹 Take all space
-                    .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                    // 📎 Tier 4 Drop Logic
+        VStack(alignment: .leading, spacing: 0) {
+            // Header Action Bar
+            HStack {
+                Text("Content-Type:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Menu {
+                    ForEach(contentTypes, id: \.self) { type in
+                        Button(type) { setContentType(type) }
+                    }
+                } label: {
+                    Text(currentContentType() ?? "Not Set")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                
+                Spacer()
+                
+                if let banner = copyBannerText {
+                    Text(banner)
+                        .font(.caption.bold())
+                        .foregroundStyle(.green)
+                        .transition(.opacity)
+                }
+                
+                Button {
+                    copyToClipboard()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .help("Copy Body")
+                
+                Button {
+                    withAnimation { request.requestBody = "" }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .help("Clear Body")
+                .padding(.leading, 8)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .windowBackgroundColor))
+            
+            Divider()
+
+            TextEditor(text: $request.requestBody)
+                .font(.system(size: 13, weight: .regular, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .background(Color(nsColor: .textBackgroundColor))
+                .padding(4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                     if let provider = providers.first {
                         _ = provider.loadObject(ofClass: URL.self) { url, _ in
                             if let url = url, let content = try? String(contentsOf: url, encoding: .utf8) {
@@ -290,90 +472,210 @@ struct BodyEditorView: View {
                     }
                     return false
                 }
+        
+            Divider()
             
-                Divider() // Visual separation for footer
-                
-                HStack {
-                                Text("Supports JSON, XML, or Plain Text.")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                    Button("Format JSON") {
-                        guard let data = request.requestBody.data(using: .utf8),
-                              let json = try? JSONSerialization.jsonObject(with: data),
-                              let pretty = try? JSONSerialization.data(withJSONObject: json,
-                                                                       options: [.prettyPrinted, .withoutEscapingSlashes]),
-                              let formatted = String(data: pretty, encoding: .utf8) else { return }
+            // Footer
+            HStack {
+                Text("Supports JSON, XML, or Plain Text.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Format JSON") {
+                    guard let data = request.requestBody.data(using: .utf8),
+                          let json = try? JSONSerialization.jsonObject(with: data),
+                          let pretty = try? JSONSerialization.data(withJSONObject: json,
+                                                                   options: [.prettyPrinted, .withoutEscapingSlashes]),
+                          let formatted = String(data: pretty, encoding: .utf8) else { return }
+                    withAnimation {
                         request.requestBody = formatted
                     }
-                    .buttonStyle(.link)
-                    .font(.system(size: 10))
-
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial)
-                            .frame(maxWidth: .infinity) // 🔹 Force footer width
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 10))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .frame(maxWidth: .infinity)
+        }
+    }
+    
+    private func currentContentType() -> String? {
+        request.headers.first(where: { $0.key.lowercased() == "content-type" && $0.isEnabled })?.value
+    }
+    
+    private func setContentType(_ type: String) {
+        if let idx = request.headers.firstIndex(where: { $0.key.lowercased() == "content-type" }) {
+            request.headers[idx].value = type
+            request.headers[idx].isEnabled = true
+        } else {
+            request.headers.append(KVPair(key: "Content-Type", value: type))
+        }
+    }
+    
+    private func copyToClipboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(request.requestBody, forType: .string)
+        withAnimation { copyBannerText = "Copied!" }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation { copyBannerText = nil }
         }
     }
 }
 
 struct AuthEditorView: View {
     @Bindable var request: APIRequest
+    @State private var isSecure = true
+    @State private var copyBannerText: String? = nil
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Authentication Type")
-                    .font(.headline)
-                    .padding(.bottom, 4)
-
-                Picker("Type", selection: $request.auth) {
-                    Text("None").tag(AuthType.none)
-                    Text("Bearer Token").tag(AuthType.bearer)
-                    Text("Basic Auth").tag(AuthType.basic)
-                    Text("API Key").tag(AuthType.apiKey)
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                switch request.auth {
-                case .bearer:
-                    authField(title: "Bearer Token", placeholder: "Enter token…")
-                case .basic:
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Username : Password")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        TextField("user:pass", text: $request.authToken)
-                            .textFieldStyle(.roundedBorder)
-                            .controlSize(.large)
-                        Text("Sent as Base64‑encoded Basic auth (e.g. admin:secret)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                HStack {
+                    Text("Authentication")
+                        .font(.headline)
+                    Spacer()
+                    Picker("", selection: $request.auth) {
+                        Text("No Auth").tag(AuthType.none)
+                        Text("Bearer Token").tag(AuthType.bearer)
+                        Text("Basic Auth").tag(AuthType.basic)
+                        Text("API Key").tag(AuthType.apiKey)
                     }
-                case .apiKey:
-                    authField(title: "API Key", placeholder: "Enter key…")
-                case .none:
-                    EmptyView()
+                    .pickerStyle(.menu)
+                    .frame(width: 150)
+                }
+                .padding(.bottom, 8)
+                
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 16) {
+                        switch request.auth {
+                        case .bearer:
+                            authField(title: "Bearer Token", placeholder: "e.g. eyJhbGciOiJIUzI1NiIs...", isSecret: true)
+                            Text("The token will be added to the request as: `Authorization: Bearer <Token>`")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        case .basic:
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Credentials")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.secondary)
+                                
+                                HStack {
+                                    if isSecure {
+                                        SecureField("username:password", text: $request.authToken)
+                                            .textFieldStyle(.roundedBorder)
+                                            .controlSize(.large)
+                                            .font(.system(.body, design: .monospaced))
+                                    } else {
+                                        TextField("username:password", text: $request.authToken)
+                                            .textFieldStyle(.roundedBorder)
+                                            .controlSize(.large)
+                                            .font(.system(.body, design: .monospaced))
+                                    }
+                                    
+                                    Button {
+                                        isSecure.toggle()
+                                    } label: {
+                                        Image(systemName: isSecure ? "eye.slash" : "eye")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.leading, 4)
+                                }
+                                
+                                Text("This value is automatically Base64-encoded and sent as `Authorization: Basic <Base64>`")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        case .apiKey:
+                            authField(title: "API Key", placeholder: "e.g. x-api-key-value", isSecret: true)
+                            Text("Note: If the API Key should be a header or query parameter, consider setting it manually in the Headers or Params tab depending on the API's requirements.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        case .none:
+                            HStack {
+                                Spacer()
+                                VStack(spacing: 8) {
+                                    Image(systemName: "lock.open")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.tertiary)
+                                    Text("No authentication will be used with this request.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.vertical, 20)
+                                Spacer()
+                            }
+                        }
+                    }
+                    .padding(8)
                 }
                 
                 Spacer()
             }
-            .padding(20) // Consistent inner padding, but fills width
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(nsColor: .windowBackgroundColor))
     }
     
     @ViewBuilder
-    private func authField(title: String, placeholder: String) -> some View {
+    private func authField(title: String, placeholder: String, isSecret: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            TextField(placeholder, text: $request.authToken)
-                .textFieldStyle(.roundedBorder)
-                .controlSize(.large)
+            HStack {
+                Text(title)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                if let banner = copyBannerText {
+                    Text(banner)
+                        .font(.caption.bold())
+                        .foregroundStyle(.green)
+                        .transition(.opacity)
+                }
+                
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(request.authToken, forType: .string)
+                    withAnimation { copyBannerText = "Copied!" }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation { copyBannerText = nil }
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.blue)
+                .disabled(request.authToken.isEmpty)
+            }
+            
+            HStack {
+                if isSecure && isSecret {
+                    SecureField(placeholder, text: $request.authToken)
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.large)
+                        .font(.system(.body, design: .monospaced))
+                } else {
+                    TextField(placeholder, text: $request.authToken)
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.large)
+                        .font(.system(.body, design: .monospaced))
+                }
+                
+                if isSecret {
+                    Button {
+                        isSecure.toggle()
+                    } label: {
+                        Image(systemName: isSecure ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 4)
+                }
+            }
         }
     }
 }

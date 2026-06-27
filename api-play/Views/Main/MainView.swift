@@ -12,12 +12,12 @@ struct MainView: View {
     // MARK: - State
     @State private var selectedRequest: APIRequest?
     @State private var selectedEnvironment: APIEnvironment?
+    @SceneStorage("lastSelectedRequestId") private var lastSelectedRequestId: String = ""
     
     // UI States
     @State private var showAIInsights = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showCommandPalette = false
-    @State private var showWebhook = false
     @State private var showCodeGen = false
 
     var body: some View {
@@ -123,9 +123,6 @@ struct MainView: View {
                 }
             }
         }
-        .inspector(isPresented: $showWebhook) {
-            WebhookView()
-        }
         .onChange(of: selectedEnvironment) { _, newValue in
             for env in environments {
                 env.isActive = (env.id == newValue?.id)
@@ -135,6 +132,17 @@ struct MainView: View {
         .onAppear {
             if selectedEnvironment == nil {
                 selectedEnvironment = environments.first(where: { $0.isActive })
+            }
+            if selectedRequest == nil, let uuid = UUID(uuidString: lastSelectedRequestId) {
+                let descriptor = FetchDescriptor<APIRequest>()
+                if let request = try? modelContext.fetch(descriptor).first(where: { $0.id == uuid }) {
+                    selectedRequest = request
+                }
+            }
+        }
+        .onChange(of: selectedRequest) { _, newValue in
+            if let id = newValue?.id.uuidString {
+                lastSelectedRequestId = id
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerCommandPalette"))) { _ in
@@ -143,126 +151,51 @@ struct MainView: View {
             }
         }
         .toolbar {
-            // LEFT: Sidebar toggle + Create menu + AI Insights
-            ToolbarItemGroup(placement: .navigation) {
-                Menu {
-                    Button {
-                        let newRequest = APIRequest(name: "New Request")
-                        modelContext.insert(newRequest)
-                        selectedRequest = newRequest
+            if !showCommandPalette {
+                // LEFT: Sidebar toggle + Create menu + AI Insights
+                ToolbarItemGroup(placement: .navigation) {
+                    Menu {
+                        Button {
+                            let newRequest = APIRequest(name: "New Request")
+                            modelContext.insert(newRequest)
+                            selectedRequest = newRequest
+                        } label: {
+                            Label("New Request", systemImage: "plus.circle")
+                        }
+                        
+                        Button {
+                            let newFolder = RequestFolder(name: "New Collection", order: 0)
+                            modelContext.insert(newFolder)
+                        } label: {
+                            Label("New Folder", systemImage: "folder.badge.plus")
+                        }
+                        
+                        Divider()
+                        
+                        Button {
+                            let newEnv = APIEnvironment(name: "New Environment")
+                            modelContext.insert(newEnv)
+                            selectedEnvironment = newEnv
+                        } label: {
+                            Label("New Environment", systemImage: "leaf.fill")
+                        }
                     } label: {
-                        Label("New Request", systemImage: "plus.circle")
+                        Image(systemName: "plus")
                     }
-
+                    .help("Create New...")
+                    
                     Button {
-                        let newFolder = RequestFolder(name: "New Collection", order: 0)
-                        modelContext.insert(newFolder)
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showAIInsights.toggle()
+                        }
                     } label: {
-                        Label("New Folder", systemImage: "folder.badge.plus")
+                        Image(systemName: "sparkles")
+                            .symbolEffect(.bounce, value: showAIInsights)
                     }
-
-                    Divider()
-
-                    Button {
-                        let newEnv = APIEnvironment(name: "New Environment")
-                        modelContext.insert(newEnv)
-                        selectedEnvironment = newEnv
-                    } label: {
-                        Label("New Environment", systemImage: "leaf.fill")
-                    }
-                } label: {
-                    Image(systemName: "plus")
+                    .keyboardShortcut("i", modifiers: .command)
+                    .help("Toggle AI Insights")
                 }
-                .help("Create New...")
-
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showAIInsights.toggle()
-                    }
-                } label: {
-                    Image(systemName: "sparkles")
-                        .symbolEffect(.bounce, value: showAIInsights)
-                }
-                .keyboardShortcut("i", modifiers: .command)
-                .help("Toggle AI Insights")
             }
-
-            // RIGHT: Environment Picker + Webhook + Flow Builder
-            ToolbarItemGroup(placement: .primaryAction) {
-                Picker("Environment", selection: $selectedEnvironment) {
-                    Text("No Environment").tag(Optional<APIEnvironment>.none)
-                    Divider()
-                    ForEach(environments) { env in
-                        Text(env.name).tag(Optional(env))
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 150)
-
-                Button {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.8)) {
-                        showWebhook.toggle()
-                    }
-                } label: {
-                    Image(systemName: "network.badge.shield.half.filled")
-                        .symbolEffect(.pulse, isActive: showWebhook)
-                }
-                .help("Local Webhook Receiver")
-
-                Button {
-                    openWindow(id: "visual-flow-builder")
-                } label: {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                }
-                .help("Visual Flow Builder")
-            }
-        }
-        .safeAreaPadding(.top)
-        .background {
-            Button("") { showCommandPalette.toggle() }
-                .keyboardShortcut("k", modifiers: .command)
-                .opacity(0)
-        }
-        .sheet(isPresented: $showCommandPalette) {
-            CommandPaletteView().frame(width: 500, height: 400)
-        }
-        // ← after the existing .sheet block
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: Notification.Name("SelectRequestInMainView")
-            )
-        ) { notification in
-            if let request = notification.object as? APIRequest {
-                selectedRequest = request
-            }
-        }
-        .inspector(isPresented: $showWebhook) {
-            WebhookView()
-        }
-        .onChange(of: selectedEnvironment) { _, newValue in
-            for env in environments {
-                env.isActive = (env.id == newValue?.id)
-            }
-            try? modelContext.save()
-        }
-        .onAppear {
-            if selectedEnvironment == nil {
-                selectedEnvironment = environments.first(where: { $0.isActive })
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SelectRequestInMainView"))) { notification in
-            if let request = notification.object as? APIRequest {
-                self.selectedRequest = request
-            }
-        }
-        // In MainView.swift – after the existing .onReceive for SelectRequestInMainView
-        .onReceive(NotificationCenter.default.publisher(
-            for: Notification.Name("TriggerCommandPalette")
-        )) { _ in
-            showCommandPalette = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerCommandPalette"))) { _ in
-            self.showCommandPalette = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleCodeGenSidebar"))) { _ in
             withAnimation(.spring(response: 0.36, dampingFraction: 0.8)) {

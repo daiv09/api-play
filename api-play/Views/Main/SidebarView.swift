@@ -32,7 +32,7 @@ struct SidebarView: View {
             Divider()
 
             List(selection: $selectedRequest) {
-                Section("Collections") {
+                Section {
                     if topLevelFolders.isEmpty {
                         Text("No Collections").font(.caption).foregroundStyle(.tertiary)
                     } else {
@@ -40,6 +40,9 @@ struct SidebarView: View {
                             FolderDisclosure(folder: folder, selectedRequest: $selectedRequest, renamingRequestID: $renamingRequestID)
                         }
                     }
+                } header: {
+                    Text("Collections")
+                        .padding(.top, 12)
                 }
 
                 Section("Requests") {
@@ -67,7 +70,7 @@ struct SidebarView: View {
                 Text(imageDropError ?? "")
             }
             .listStyle(.sidebar)
-            .environment(\.controlActiveState, .active) // Keeps selection highlight constantly blue when window loses focus
+            .environment(\.controlActiveState, .active)
             .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                 if handleImageDrop(providers: providers) { return true }
                 if handleFileDrop(providers: providers) { return true }
@@ -85,7 +88,6 @@ struct SidebarView: View {
             }
         }
         .searchable(text: $searchText, placement: .sidebar)
-        // Note: The addButtonMenu toolbar item is usually managed in MainView for better alignment
         .alert("New Folder", isPresented: $isAddingFolder) {
             TextField("Name", text: $newNameBuffer)
             Button("Create") { createFolder() }
@@ -104,43 +106,50 @@ struct SidebarView: View {
                 }.frame(minWidth: 500, minHeight: 400)
             }
         }
-        .frame(minWidth: 200, idealWidth: 260, maxWidth: 320)
+        // Enforces completely safe, responsive tracking layout limits across all viewports
+        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
     }
 
-    // MARK: - Subviews & Logic
-        private var environmentHeader: some View {
-            HStack(spacing: 6) {
-                Label("Environment", systemImage: "server.rack")
+    // MARK: - Fixed Subview Alignment
+    private var environmentHeader: some View {
+        HStack(spacing: 6) {
+            // Replaced default layout-breaking Label with dedicated stack components
+            HStack(spacing: 4) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 10, weight: .bold))
+                Text("Environment")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                
-                // This pushes everything following it to the extreme right edge
-                Spacer()
-                
-                Picker("", selection: $selectedEnvironment) {
-                    Text("Global").tag(Optional<APIEnvironment>.none)
-                    Divider()
-                    ForEach(environments) { Text($0.name).tag(Optional($0)) }
-                }
-                .labelsHidden()
-                .controlSize(.small)
-
-                if selectedEnvironment != nil {
-                    Button {
-                        isEditingEnv = true
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Edit Environment Properties")
-                }
             }
-            .padding(.horizontal, 16)
-            .frame(height: 38, alignment: .center)
-            .padding(.vertical, 10)
+            .foregroundStyle(.secondary)
+            .fixedSize() // Enforces that the text block NEVER wraps or auto-breaks onto multiple lines
+            
+            Spacer(minLength: 8)
+            
+            Picker("", selection: $selectedEnvironment) {
+                Text("Global").tag(Optional<APIEnvironment>.none)
+                Divider()
+                ForEach(environments) { Text($0.name).tag(Optional($0)) }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(minWidth: 90, maxWidth: 140) // Allows Picker content space to scale gracefully
+
+            if selectedEnvironment != nil {
+                Button {
+                    isEditingEnv = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Edit Environment Properties")
+            }
         }
+        .padding(.horizontal, 12)
+        .frame(height: 38, alignment: .center)
+        .padding(.vertical, 10)
+    }
 
     private var topLevelFolders: [RequestFolder] { folders.filter { $0.parent == nil }.sorted { $0.order < $1.order } }
     private var filteredRootRequests: [APIRequest] { searchText.isEmpty ? rootRequests : rootRequests.filter { $0.name.localizedCaseInsensitiveContains(searchText) } }
@@ -261,17 +270,7 @@ struct WebhookSidebarModule: View {
             if !webhookService.payloads.isEmpty {
                 DisclosureGroup("Recent Payloads (\(webhookService.payloads.count))", isExpanded: $isExpanded) {
                     ForEach(webhookService.payloads.prefix(5)) { payload in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(payload.method)
-                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(methodColor(payload.method))
-                                Text(payload.path)
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .lineLimit(1)
-                            }
-                        }
-                        .padding(.vertical, 2)
+                        WebhookSidebarRow(payload: payload)
                     }
                     
                     Button("Clear All") {
@@ -289,6 +288,86 @@ struct WebhookSidebarModule: View {
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+    
+    private func methodColor(_ method: String) -> Color {
+        switch method {
+        case "GET": return .green
+        case "POST": return .orange
+        case "PUT": return .blue
+        case "DELETE": return .red
+        default: return .secondary
+        }
+    }
+}
+
+struct WebhookSidebarRow: View {
+    let payload: WebhookPayload
+    @State private var showDetails = false
+
+    var body: some View {
+        Button {
+            showDetails.toggle()
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    textMethodLabel
+                    Text(payload.path)
+                        .font(.system(size: 10, design: .monospaced))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showDetails, arrowEdge: .trailing) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("\(payload.method) \(payload.path)")
+                    .font(.headline)
+                
+                Text(payload.timestamp, style: .time)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Divider()
+                
+                if !payload.headers.isEmpty {
+                    Text("Pages").font(.caption.bold())
+                    ScrollView {
+                        ForEach(Array(payload.headers.keys.sorted()), id: \.self) { key in
+                            HStack(alignment: .top) {
+                                Text(key).font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                Text(payload.headers[key] ?? "").font(.caption).textSelection(.enabled)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 100)
+                    Divider()
+                }
+                
+                if !payload.body.isEmpty {
+                    Text("Body").font(.caption.bold())
+                    ScrollView {
+                        Text(payload.body)
+                            .font(.system(size: 10, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 200)
+                } else {
+                    Text("No Body").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+            .frame(width: 300)
+        }
+    }
+    
+    private var textMethodLabel: some View {
+        Text(payload.method)
+            .font(.system(size: 8, weight: .bold, design: .monospaced))
+            .foregroundStyle(methodColor(payload.method))
     }
     
     private func methodColor(_ method: String) -> Color {
@@ -458,12 +537,12 @@ struct RequestRow: View {
                     .rotationEffect(.degrees(35))
                     .foregroundStyle(isSelected ? .white : .secondary.opacity(0.8))
                     .transition(.scale.combined(with: .opacity))
+                    .animation(.easeOut(duration: 0.15), value: request.isFavorite)
             }
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onChange(of: isRenaming) { if $1 { isFocused = true } }
-        .animation(.easeOut(duration: 0.15), value: request.isFavorite)
     }
 
     private var methodColor: Color {
