@@ -13,63 +13,92 @@ struct GraphQLEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // MARK: - Header Toolbar
-            HStack {
-                Picker("", selection: $selectedTab) {
-                    ForEach(Tab.allCases, id: \.self) {
-                        Text($0.rawValue).tag($0)
+            // 🔹 1. FLAT HEADER NAVIGATION BAR (Exact Match to REST View)
+            HStack(spacing: 20) {
+                ForEach(Tab.allCases, id: \.self) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        VStack(spacing: 4) {
+                            Spacer()
+                            Text(tab.rawValue)
+                                .font(.body)
+                                .fontWeight(selectedTab == tab ? .medium : .regular)
+                                .foregroundStyle(selectedTab == tab ? Color.blue : .primary.opacity(0.7))
+                            
+                            // Fine indicator line at the bottom of the active tab layer
+                            Rectangle()
+                                .fill(selectedTab == tab ? Color.blue : Color.clear)
+                                .frame(height: 2)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 38)
+            .background(Color(nsColor: .windowBackgroundColor))
+            
+            Divider()
+            
+            // 🔹 2. SECONDARY CONTEXT ROW (Matches heights of Content-Type/Auth toolbars)
+            HStack {
+                Text(selectedTab == .query ? "GraphQL Schema Operations" : "JSON Variable Workspace")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
                 
                 Spacer()
                 
-                // Native macOS Actions
+                // Unified Actions Container
                 HStack(spacing: 12) {
-                    Button(action: { query = "" ; variables = "" }) {
+                    Button(action: { query = ""; variables = "" }) {
                         Image(systemName: "trash")
+                            .foregroundStyle(.red.opacity(0.8))
                     }
                     .buttonStyle(.plain)
-                    .help("Clear Editor")
+                    .help("Clear Editor Pane")
                     
                     Button(action: prettifyCurrentTab) {
-                        Image(systemName: "wand.and.stars")
-                        Text("Prettify")
+                        HStack(spacing: 4) {
+                            Image(systemName: "wand.and.stars")
+                            Text("Prettify")
+                        }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(selectedTab != .variables && variables.isEmpty)
+                    .buttonStyle(.link)
+                    .font(.caption.bold())
+                    .foregroundStyle(.blue)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial) // Liquid Glass Header
+            .frame(height: 34) // Identical row tracking constraint
+            .background(Color(nsColor: .controlBackgroundColor))
             
             Divider()
 
-            // MARK: - Editor Area
+            // 🔹 3. CLEAN CANVAS TEXTAREA WORKSPACE
             ZStack {
                 if selectedTab == .query {
-                    editorView(
-                        placeholder: "# Write your GraphQL query here...",
+                    editorWorkspace(
+                        placeholder: "# Write your GraphQL query operation parameters here...",
                         text: $query,
                         icon: "square.stack.3d.up"
                     )
                 } else {
-                    editorView(
+                    editorWorkspace(
                         placeholder: "{\n  \"variable\": \"value\"\n}",
                         text: $variables,
                         icon: "curlybraces"
                     )
                 }
             }
-            .background(Color(nsColor: .textBackgroundColor)) // Native Editor Background
+            .background(Color(nsColor: .textBackgroundColor)) // Symmetrical view windowing target
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Prettify Helpers
+    // MARK: - Prettify Engine Core Orchestrators
     private func prettifyCurrentTab() {
         if selectedTab == .query {
             query = prettifyQuery(query)
@@ -78,7 +107,6 @@ struct GraphQLEditorView: View {
         }
     }
 
-    // Very simple GraphQL‑query indenter (brace‑aware)
     private func prettifyQuery(_ raw: String) -> String {
         let lines = raw.components(separatedBy: .newlines)
         var result = ""
@@ -97,45 +125,41 @@ struct GraphQLEditorView: View {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // JSON‑variables prettifier
     private func prettifyVariables(_ raw: String) -> String {
         guard let data = raw.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data),
-              let pretty = try? JSONSerialization.data(withJSONObject: json,
-                                                       options: [.prettyPrinted, .sortedKeys]),
+              let pretty = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
               let str = String(data: pretty, encoding: .utf8) else { return raw }
         return str
     }
 
-    
-    // MARK: - Native Styled Editor
+    // MARK: - Flat Structured Editor Layer (Unified Padding Specs)
     @ViewBuilder
-    private func editorView(placeholder: String, text: Binding<String>, icon: String) -> some View {
+    private func editorWorkspace(placeholder: String, text: Binding<String>, icon: String) -> some View {
         VStack(spacing: 0) {
-            // Subtle line number / gutter simulation
-            HStack(alignment: .top, spacing: 0) {
-                
-                // Content
-                ZStack(alignment: .topLeading) {
-                    if text.wrappedValue.isEmpty {
-                        Text(placeholder)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.5))
-                            .padding(.top, 8)
-                            .padding(.leading, 5)
-                    }
-                    
-                    TextEditor(text: text)
-                        .font(.system(.body, design: .monospaced))
-                        .scrollContentBackground(.hidden) // Required for custom background
-                        .padding(4)
-                        // Enable macOS 26 Intelligence Writing Tools
-                        .writingToolsBehavior(.complete)
+            ZStack(alignment: .topLeading) {
+                if text.wrappedValue.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.4))
+                        .padding(.top, 12) // Perfect baseline down offset matching BodyEditorView
+                        .padding(.horizontal, 20)
                 }
+                
+                TextEditor(text: text)
+                    .font(.system(size: 13, weight: .regular, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .padding(.top, 12)
+                    .padding(.horizontal, 16)
+                    .writingToolsBehavior(.complete)
             }
-            .padding(8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Footer Info
+            Divider()
+                .padding(.horizontal, 16)
+            
+            // Integrated Bottom Analytics Panel Footer
             HStack {
                 Label(selectedTab.rawValue, systemImage: icon)
                     .font(.system(size: 10, weight: .medium))
@@ -145,9 +169,9 @@ struct GraphQLEditorView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .background(.thinMaterial)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .textBackgroundColor))
         }
     }
 }

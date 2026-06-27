@@ -14,8 +14,12 @@ struct CommitButtonView: View {
         Button {
             handleCommitIntent()
         } label: {
-            Label("Commit", systemImage: "arrow.up.circle.fill")
-                .foregroundStyle(request.isDirty ? .primary : .secondary)
+            // 🔥 FIX: Replacing Label with an explicit HStack forces text layout visibility on macOS
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.circle.fill")
+                Text("Commit")
+            }
+            .foregroundStyle(request.isDirty ? .primary : .secondary)
         }
         .help(request.isDirty ? "Save a snapshot of your current changes" : "No changes to commit")
         

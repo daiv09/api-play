@@ -15,6 +15,8 @@ struct ResponseView: View {
     @State private var visualExplainCache: [CGFloat: String] = [:]
     @State private var lastScrollY: CGFloat = 0
     @State private var slideDirection: Edge = .trailing
+    // Added state to track clipboard copy state
+    @State private var isCopied = false
 
     enum ViewMode: String, CaseIterable {
         case json = "JSON", raw = "Raw", headers = "Headers", preview = "Preview"
@@ -22,69 +24,8 @@ struct ResponseView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let response = request.lastResponse {
-                enhancedToolbar(for: response)
-                Divider()
-                
-                ZStack {
-                    if isShowingHistory {
-                        CommitHistoryView(request: request) {
-                            isShowingHistory = false
-                        }
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .move(edge: .bottom).combined(with: .opacity)
-                        ))
-                    } else {
-                        ZStack {
-                            Color(nsColor: .textBackgroundColor)
-                            
-                            switch viewMode {
-                            case .json:
-                                jsonContentView(content: response.body)
-                                    .id(viewMode)
-                                    .transition(.asymmetric(
-                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
-                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
-                                    ))
-                            case .raw:
-                                rawContentView(content: response.body)
-                                    .id(viewMode)
-                                    .transition(.asymmetric(
-                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
-                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
-                                    ))
-                            case .headers:
-                                headersContentView(headers: response.headers)
-                                    .id(viewMode)
-                                    .transition(.asymmetric(
-                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
-                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
-                                    ))
-                            case .preview:
-                                enhancedPreviewContent(for: response)
-                                    .id(viewMode)
-                                    .transition(.asymmetric(
-                                        insertion: .move(edge: slideDirection).combined(with: .opacity),
-                                        removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
-                                    ))
-                            }
-                        }
-                        .transition(.opacity)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.snappy(duration: 0.22, extraBounce: 0), value: viewMode)
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isShowingHistory)
-                .inspector(isPresented: $isShowingAI) {
-                    AIInspectorView(ai: ai, bodyText: response.body)
-                        .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
-                }
-                
-                Divider()
-                footerStatusBar(for: response)
-            } else if isShowingHistory {
-                // If no last response, but we want history, still show the history view
+            // Unify History Layout completely to prevent ghost padding gaps from the main response toolbar
+            if isShowingHistory {
                 VStack(spacing: 0) {
                     historyToolbar
                     Divider()
@@ -93,11 +34,65 @@ struct ResponseView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .bottom).combined(with: .opacity)
+                ))
+            } else if let response = request.lastResponse {
+                // Main Active Response State
+                enhancedToolbar(for: response)
+                Divider()
+                
+                ZStack {
+                    Color(nsColor: .textBackgroundColor)
+                    
+                    switch viewMode {
+                    case .json:
+                        jsonContentView(content: response.body)
+                            .id(viewMode)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                            ))
+                    case .raw:
+                        rawContentView(content: response.body)
+                            .id(viewMode)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                            ))
+                    case .headers:
+                        headersContentView(headers: response.headers)
+                            .id(viewMode)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                            ))
+                    case .preview:
+                        enhancedPreviewContent(for: response)
+                            .id(viewMode)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: slideDirection).combined(with: .opacity),
+                                removal: .move(edge: slideDirection == .trailing ? .leading : .trailing).combined(with: .opacity)
+                            ))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .inspector(isPresented: $isShowingAI) {
+                    AIInspectorView(ai: ai, bodyText: response.body)
+                        .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
+                }
+                
+                Divider()
+                footerStatusBar(for: response)
             } else {
+                // Fallback Empty State
                 emptyStateView
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .animation(.snappy(duration: 0.22, extraBounce: 0), value: viewMode)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isShowingHistory)
         .onChange(of: viewMode) { oldValue, newValue in
             isShowingHistory = false
             let oldIndex = ViewMode.allCases.firstIndex(of: oldValue) ?? 0
@@ -141,14 +136,14 @@ struct ResponseView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
     @ViewBuilder
     private func enhancedPreviewContent(for response: APIResponse) -> some View {
         VStack(spacing: 0) {
-            // 1. The main content
             WebView(
                 htmlString: response.body,
                 baseURL: URL(string: response.url),
@@ -157,11 +152,10 @@ struct ResponseView: View {
                 requestId: request.id
             )
             .id(request.id)
-            .frame(maxWidth: .infinity, maxHeight: .infinity) // Force it to take all space
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider() // Add a clear separation
+            Divider()
 
-            // 2. The Bottom Toolbar
             HStack {
                 Label("Internal Preview", systemImage: "safari")
                     .font(.caption2)
@@ -195,7 +189,7 @@ struct ResponseView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(.ultraThinMaterial) // This provides the "bar" look at the bottom
+            .background(.ultraThinMaterial)
         }
     }
 
@@ -211,29 +205,23 @@ struct ResponseView: View {
 
         Task { @MainActor in
             let currentScrollY = await getWebViewScrollY()
-            // Check cache
             if let cachedEntry = visualExplainCache.first(where: { abs($0.key - currentScrollY) < 5 }) {
                 let currentURL = request.lastResponse?.url ?? "Unknown URL"
-                Task { @MainActor in
-                    ai.analyzeVisualContext(
-                        text: cachedEntry.value,
-                        sourceURL: currentURL,
-                        image: NSImage()
-                    )
-                    isAnalyzingVision = false
-                    isShowingAI = true
-                }
+                ai.analyzeVisualContext(
+                    text: cachedEntry.value,
+                    sourceURL: currentURL,
+                    image: NSImage()
+                )
+                isAnalyzingVision = false
+                isShowingAI = true
                 return
             }
 
-            // 1. Capture context asynchronously
             capturePreviewSnapshot { screenshot in
                 let currentURL = request.lastResponse?.url ?? "Unknown URL"
                 
-                // 2. Run Vision OCR
                 performVisionAnalysis(on: screenshot) { detectedText in
                     Task { @MainActor in
-                        // 3. Update AI State
                         ai.analyzeVisualContext(
                             text: detectedText,
                             sourceURL: currentURL,
@@ -328,7 +316,7 @@ struct ResponseView: View {
         return nil
     }
 
-    // MARK: - Supporting Views (Kept for compatibility)
+    // MARK: - Supporting Views
     
     private func enhancedToolbar(for response: APIResponse) -> some View {
         HStack(spacing: 16) {
@@ -340,7 +328,9 @@ struct ResponseView: View {
             }
             .font(.system(size: 11, weight: .medium, design: .monospaced))
             .foregroundStyle(.secondary)
+            
             Spacer()
+            
             let modes = availableModes(for: response)
             Picker("", selection: $viewMode) {
                 ForEach(modes, id: \.self) { mode in
@@ -350,8 +340,44 @@ struct ResponseView: View {
             .pickerStyle(.segmented)
             .frame(width: CGFloat(modes.count * 60))
             .controlSize(.small)
-            Button { copyToClipboard(text: response.body) } label: { Image(systemName: "doc.on.doc") }
-            .buttonStyle(.plain)
+            
+            // Contextual Copy Button: Only display if NOT in preview mode
+            if viewMode != .preview {
+                Button {
+                    // Determine content based on the selected view mode
+                    let textToCopy: String
+                    switch viewMode {
+                    case .json:
+                        textToCopy = formattedJSON(response.body)
+                    case .raw:
+                        textToCopy = formattedRaw(response.body)
+                    case .headers:
+                        // Format headers dictionary into a clean "Key: Value" string list
+                        textToCopy = response.headers.sorted(by: { $0.key < $1.key })
+                            .map { "\($0.key): \($0.value)" }
+                            .joined(separator: "\n")
+                    case .preview:
+                        textToCopy = "" // Fallback (button hidden anyway)
+                    }
+                    
+                    copyToClipboard(text: textToCopy)
+                    
+                    withAnimation(.snappy(duration: 0.15)) {
+                        isCopied = true
+                    }
+                    // Resets after 2 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        withAnimation(.snappy(duration: 0.15)) {
+                            isCopied = false
+                        }
+                    }
+                } label: {
+                    Text(isCopied ? "Copied" : "Copy")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isCopied ? Color.green : Color.secondary)
+                }
+                .buttonStyle(.plain)
+            }
             
             Divider().frame(height: 12)
             
@@ -364,7 +390,8 @@ struct ResponseView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
@@ -375,14 +402,16 @@ struct ResponseView: View {
             Circle().fill(color).frame(width: 8, height: 8)
             Text("\(code) \(label)").font(.system(size: 12, weight: .bold, design: .rounded))
         }
-        .foregroundStyle(color).padding(.horizontal, 10).padding(.vertical, 4)
-        .background(color.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 6))
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     private func formattedJSON(_ content: String) -> String {
         guard let data = content.data(using: .utf8),
               let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []),
-              // .prettyPrinted ensures structured indentation for JSON
               let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
               let prettyString = String(data: prettyData, encoding: .utf8) else {
             return content
@@ -392,27 +421,21 @@ struct ResponseView: View {
 
     private func formattedRaw(_ content: String) -> String {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // If the content is HTML or XML, apply a clean structural indentation parser
         if trimmed.hasPrefix("<") && trimmed.hasSuffix(">") {
             return formatHTML(trimmed)
         }
         return content
     }
 
-    // Helper to manually parse and indent XML/HTML content neatly line-by-line
     private func formatHTML(_ html: String) -> String {
-        // Standardize spacing between closing and opening tags
         let cleanHTML = html.replacingOccurrences(of: ">\\s*<", with: "><", options: .regularExpression)
-        
         var formatted = ""
         var indentLevel = 0
-        let indentString = "    " // 4 spaces per indentation level
+        let indentString = "    "
         
         var i = cleanHTML.startIndex
         while i < cleanHTML.endIndex {
             if cleanHTML[i] == "<" {
-                // Find the full tag component block
                 guard let closingBracketIndex = cleanHTML[i...].firstIndex(of: ">") else {
                     formatted.append(String(cleanHTML[i...]))
                     break
@@ -421,21 +444,17 @@ struct ResponseView: View {
                 let tag = String(cleanHTML[i...closingBracketIndex])
                 
                 if tag.hasPrefix("</") {
-                    // It's a closing tag: step backward first, then add the line
                     indentLevel = max(0, indentLevel - 1)
                     formatted.append("\n" + String(repeating: indentString, count: indentLevel) + tag)
                 } else if tag.hasSuffix("/>") || tag.hasPrefix("<!") || tag.hasPrefix("<?") {
-                    // Self-closing tags, comments, or doctypes don't change indentation depth
                     formatted.append("\n" + String(repeating: indentString, count: indentLevel) + tag)
                 } else {
-                    // Opening tag: indent and step forward for subsequent tags
                     formatted.append("\n" + String(repeating: indentString, count: indentLevel) + tag)
                     indentLevel += 1
                 }
                 
                 i = cleanHTML.index(after: closingBracketIndex)
             } else {
-                // Read inner text until the next tag starts
                 let nextBracketIndex = cleanHTML[i...].firstIndex(of: "<") ?? cleanHTML.endIndex
                 let text = cleanHTML[i..<nextBracketIndex].trimmingCharacters(in: .whitespacesAndNewlines)
                 
@@ -445,13 +464,11 @@ struct ResponseView: View {
                 i = nextBracketIndex
             }
         }
-        
         return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func jsonContentView(content: String) -> some View {
         ScrollView {
-            // Pass the string through your formattedJSON helper function
             Text(formattedJSON(content))
                 .font(.system(size: 12, design: .monospaced))
                 .padding(16)
@@ -461,7 +478,6 @@ struct ResponseView: View {
     }
 
     private func rawContentView(content: String) -> some View {
-        // Pass the string through your formattedRaw helper function
         TextEditor(text: .constant(formattedRaw(content)))
             .font(.system(size: 12, design: .monospaced))
             .scrollContentBackground(.hidden)
@@ -480,14 +496,33 @@ struct ResponseView: View {
     }
 
     private func footerStatusBar(for response: APIResponse) -> some View {
-        HStack {
+        HStack(spacing: 6) {
             Image(systemName: "info.circle")
+                .imageScale(.small)
+            
             Text(response.headers["Content-Type"] ?? "text/html")
-            Spacer()
+                .lineLimit(1)
+                .allowsTightening(true)
+                .layoutPriority(1)
+            
+            Spacer(minLength: 16)
+            
             Text("ID: \(request.id.uuidString.prefix(8))")
+                .lineLimit(1)
+                .layoutPriority(1)
         }
         .font(.system(size: 10, weight: .medium, design: .monospaced))
-        .foregroundStyle(.secondary).padding(.horizontal, 12).padding(.vertical, 6)
+        .foregroundStyle(.secondary)
+        // 1. Padding INSIDE the text row container
+        .padding(.leading, 14)
+        .padding(.trailing, 18)
+        .padding(.top, 8)
+        .padding(.bottom, 12) // Slightly increased to push text higher up away from the window bezel
+        // 2. Explicitly clip or clear out window safe area defaults if it's hitting a macOS border constraint
+        .fixedSize(horizontal: false, vertical: true)
+        // 3. FORCE a background on the footer itself so the padding space is structurally allocated
+        // and visually distinct from the rest of the window background layout.
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var emptyStateView: some View {
@@ -502,18 +537,10 @@ struct ResponseView: View {
 
     private func availableModes(for response: APIResponse) -> [ViewMode] {
         var modes: [ViewMode] = []
-        if response.isJSON {
-            modes.append(.json)
-        }
-        if response.hasBody {
-            modes.append(.raw)
-        }
-        if response.hasHeaders {
-            modes.append(.headers)
-        }
-        if response.hasPreview {
-            modes.append(.preview)
-        }
+        if response.isJSON { modes.append(.json) }
+        if response.hasBody { modes.append(.raw) }
+        if response.hasHeaders { modes.append(.headers) }
+        if response.hasPreview { modes.append(.preview) }
         return modes
     }
 

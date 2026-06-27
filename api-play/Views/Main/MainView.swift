@@ -22,14 +22,21 @@ struct MainView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // SIDEBAR
-            SidebarView(
-                selectedRequest: $selectedRequest,
-                selectedEnvironment: $selectedEnvironment
-            )
-            .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 320)
-            
-        } detail: {
+                    // SIDEBAR
+                    VStack(spacing: 0) {
+                        SidebarView(
+                            selectedRequest: $selectedRequest,
+                            selectedEnvironment: $selectedEnvironment
+                        )
+                        
+                        // This acts as a rigid, uncrushable buffer block outside the List content context
+                        Color.clear
+                            .frame(height: 16)
+                            .layoutPriority(10) // Prevents the window constraint engine from compressing this out of existence
+                    }
+                    .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 320)
+                    
+                } detail: {
             // MAIN CONTENT AREA
             Group {
                 if let request = selectedRequest {

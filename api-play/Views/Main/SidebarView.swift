@@ -61,6 +61,9 @@ struct SidebarView: View {
                     WebhookSidebarModule()
                 }
             }
+            .listStyle(.sidebar)
+            .frame(minHeight: 0) // 1. CRITICAL: Allows List to shrink infinitely instead of resisting and causing layout clipping
+            .environment(\.controlActiveState, .active)
             .alert("Import Failed", isPresented: Binding(
                 get: { imageDropError != nil },
                 set: { if !$0 { imageDropError = nil } }
@@ -69,8 +72,6 @@ struct SidebarView: View {
             } message: {
                 Text(imageDropError ?? "")
             }
-            .listStyle(.sidebar)
-            .environment(\.controlActiveState, .active)
             .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                 if handleImageDrop(providers: providers) { return true }
                 if handleFileDrop(providers: providers) { return true }
@@ -87,6 +88,9 @@ struct SidebarView: View {
                 }
             }
         }
+        .padding(.bottom, 16) // 2. Strict, non-negotiable bottom margin clearance wrapper
+        // 3. Move the constraint modifications to the absolute root level container
+        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
         .searchable(text: $searchText, placement: .sidebar)
         .alert("New Folder", isPresented: $isAddingFolder) {
             TextField("Name", text: $newNameBuffer)
@@ -106,14 +110,11 @@ struct SidebarView: View {
                 }.frame(minWidth: 500, minHeight: 400)
             }
         }
-        // Enforces completely safe, responsive tracking layout limits across all viewports
-        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
     }
 
     // MARK: - Fixed Subview Alignment
     private var environmentHeader: some View {
         HStack(spacing: 6) {
-            // Replaced default layout-breaking Label with dedicated stack components
             HStack(spacing: 4) {
                 Image(systemName: "server.rack")
                     .font(.system(size: 10, weight: .bold))
@@ -121,7 +122,7 @@ struct SidebarView: View {
                     .font(.system(size: 11, weight: .bold))
             }
             .foregroundStyle(.secondary)
-            .fixedSize() // Enforces that the text block NEVER wraps or auto-breaks onto multiple lines
+            .fixedSize()
             
             Spacer(minLength: 8)
             
@@ -132,7 +133,7 @@ struct SidebarView: View {
             }
             .labelsHidden()
             .controlSize(.small)
-            .frame(minWidth: 90, maxWidth: 140) // Allows Picker content space to scale gracefully
+            .frame(minWidth: 90, maxWidth: 140)
 
             if selectedEnvironment != nil {
                 Button {
