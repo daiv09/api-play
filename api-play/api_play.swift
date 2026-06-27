@@ -4,7 +4,7 @@ import SwiftData
 #if os(macOS)
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return true
+        return false
     }
 }
 #endif
@@ -54,6 +54,7 @@ struct api_playApp: App {
                         .zIndex(1)
                 }
             }
+            .ignoresSafeArea(.all, edges: .bottom)
             // Apply the animation globally to the ZStack transitions
             .animation(.easeInOut(duration: 1.0), value: coordinator.showMainContent)
             .frame(minWidth: 1000, idealWidth: 1400, maxWidth: .infinity, minHeight: 600, idealHeight: 900, maxHeight: .infinity)
@@ -79,6 +80,15 @@ struct api_playApp: App {
         }
         .commands {
             SidebarCommands()
+            
+            CommandGroup(after: .windowArrangement) {
+                Button("Show Main Window") {
+                    NSApplication.shared.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                }
+                .keyboardShortcut("0", modifiers: .command)
+            }
+            
             CommandGroup(replacing: .newItem) {
                 Button("AI Command Bar...") {
                     NotificationCenter.default.post(name: NSNotification.Name("TriggerCommandPalette"), object: nil)

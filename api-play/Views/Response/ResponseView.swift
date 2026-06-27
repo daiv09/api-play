@@ -520,10 +520,9 @@ struct ResponseView: View {
         .font(.system(size: 10, weight: .medium, design: .monospaced))
         .foregroundStyle(.secondary)
         // 1. Padding INSIDE the text row container
-        .padding(.leading, 14)
-        .padding(.trailing, 18)
-        .padding(.top, 8)
-        .padding(.bottom, 12) // Slightly increased to push text higher up away from the window bezel
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(minHeight: 32)
         // 2. Explicitly clip or clear out window safe area defaults if it's hitting a macOS border constraint
         .fixedSize(horizontal: false, vertical: true)
         // 3. FORCE a background on the footer itself so the padding space is structurally allocated

@@ -177,7 +177,6 @@ struct SidebarView: View {
 
     private func deleteRootRequests(at offsets: IndexSet) {
         offsets.map { rootRequests[$0] }.forEach { req in
-            SpotlightManager.deindex(requestID: req.id)
             modelContext.delete(req)
         }
     }
@@ -333,7 +332,7 @@ struct WebhookSidebarRow: View {
                 Divider()
                 
                 if !payload.headers.isEmpty {
-                    Text("Pages").font(.caption.bold())
+                    Text("Headers").font(.caption.bold())
                     ScrollView {
                         ForEach(Array(payload.headers.keys.sorted()), id: \.self) { key in
                             HStack(alignment: .top) {
@@ -424,7 +423,6 @@ struct RequestContextMenu: ViewModifier {
             
             Button(role: .destructive) {
                 if isSelected { selectedRequest = nil }
-                SpotlightManager.deindex(requestID: request.id)
                 modelContext.delete(request)
             } label: {
                 Label("Delete", systemImage: "trash")

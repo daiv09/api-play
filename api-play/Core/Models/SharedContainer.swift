@@ -4,29 +4,25 @@ import Foundation
 class SharedContainer {
     @MainActor
     static let shared: ModelContainer = {
+        // Full schema — every @Model type in the app must be listed here.
+        // Missing a model causes SwiftData to silently drop relationships.
         let schema = Schema([
-            RequestFolder.self,
             APIRequest.self,
-            APIEnvironment.self
+            RequestFolder.self,
+            APIEnvironment.self,
+            EnvVar.self,
+            RequestCommit.self
         ])
-        
-        // Optional AppGroup fallback for preview/testing without capabilities
-        let appGroupIdentifier = "group.com.api-play.shared"
-        var url: URL
-        
-        if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
-            url = containerURL.appendingPathComponent("api-play.sqlite")
-        } else {
-            // Fallback to Application Support if App Group is not configured
-            let fallbackDir = URL.applicationSupportDirectory
-            if !FileManager.default.fileExists(atPath: fallbackDir.path) {
-                try? FileManager.default.createDirectory(at: fallbackDir, withIntermediateDirectories: true)
-            }
-            url = fallbackDir.appendingPathComponent("api-play.sqlite")
-        }
-        
-        let modelConfiguration = ModelConfiguration(url: url)
-        
+
+        // Store in ~/Library/Application Support/<BundleID>/
+        // This is the standard sandboxed location — no entitlements required.
+        // DO NOT use FileManager.containerURL(forSecurityApplicationGroupIdentifier:)
+        // unless you have a separate app extension that needs shared access.
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false
+        )
+
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {

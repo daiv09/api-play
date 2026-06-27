@@ -82,28 +82,3 @@ struct APIPlayShortcuts: AppShortcutsProvider {
     }
 }
 
-// MARK: - Core Spotlight Integration
-
-class SpotlightManager {
-    static func index(request: APIRequest) {
-        let attributeSet = CSSearchableItemAttributeSet(contentType: .item)
-        attributeSet.title = request.name
-        attributeSet.contentDescription = "\(request.httpMethod.rawValue) \(request.urlString)"
-        
-        let item = CSSearchableItem(uniqueIdentifier: request.id.uuidString, domainIdentifier: "com.api-play.requests", attributeSet: attributeSet)
-        
-        CSSearchableIndex.default().indexSearchableItems([item]) { error in
-            if let error = error {
-                print("Spotlight indexing error: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    static func deindex(requestID: UUID) {
-        CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: [requestID.uuidString]) { error in
-            if let error = error {
-                print("Spotlight deindexing error: \(error.localizedDescription)")
-            }
-        }
-    }
-}

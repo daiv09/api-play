@@ -16,9 +16,6 @@ struct WebView: NSViewRepresentable {
         config.allowsAirPlayForMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         
-        // Security settings
-        config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
-        config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
         
         let preferences = WKWebpagePreferences()
         preferences.allowsContentJavaScript = true

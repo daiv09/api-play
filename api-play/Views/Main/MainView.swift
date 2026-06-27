@@ -110,7 +110,9 @@ struct MainView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .safeAreaPadding(.top)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear.frame(height: 1)
+        }
         .background {
             Button("") { showCommandPalette.toggle() }
                 .keyboardShortcut("k", modifiers: .command)

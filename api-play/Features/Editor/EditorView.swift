@@ -469,7 +469,10 @@ struct BodyEditorView: View {
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 if let provider = providers.first {
                     _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                        if let url = url, let content = try? String(contentsOf: url, encoding: .utf8) {
+                        guard let url = url else { return }
+                        let didAccess = url.startAccessingSecurityScopedResource()
+                        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+                        if let content = try? String(contentsOf: url, encoding: .utf8) {
                             DispatchQueue.main.async {
                                 self.request.requestBody = content
                             }
