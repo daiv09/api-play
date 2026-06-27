@@ -129,6 +129,7 @@ struct EditorView: View {
         } message: {
             Text(network.error?.localizedDescription ?? "An unknown error occurred.")
         }
+        // 🛠️ Updated to the non-deprecated platform closures syntax
         .onChange(of: selectedTab) { oldValue, newValue in
             let oldIndex = EditorTab.allCases.firstIndex(of: oldValue) ?? 0
             let newIndex = EditorTab.allCases.firstIndex(of: newValue) ?? 0
@@ -250,7 +251,6 @@ struct KVPairEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Re-styled Header toolbar without extra spacing gaps
             HStack {
                 Text(title)
                     .font(.subheadline.bold())
@@ -292,7 +292,7 @@ struct KVPairEditor: View {
                     }
             }
             .padding(.horizontal, 16)
-            .frame(height: 34) // Explicit flat context row height
+            .frame(height: 34)
             .background(Color(nsColor: .controlBackgroundColor))
             
             Divider()
@@ -387,16 +387,14 @@ struct KVPairEditor: View {
     }
 }
 
+// MARK: - BodyEditorView Workspace Panel
 struct BodyEditorView: View {
     @Bindable var request: APIRequest
-    
-    // Quick helper array
     let contentTypes = ["application/json", "application/xml", "application/x-www-form-urlencoded", "text/plain"]
     @State private var isCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 🔹 Header Action Bar - Matches heights & boundaries perfectly
             HStack {
                 Text("Content-Type:")
                     .font(.subheadline.bold())
@@ -416,7 +414,6 @@ struct BodyEditorView: View {
                 
                 Spacer()
                 
-                // 🔹 Dynamic Copy Button
                 Button(isCopied ? "Copied!" : "Copy") { copyToClipboard() }
                     .buttonStyle(.plain)
                     .font(.caption.bold())
@@ -436,13 +433,11 @@ struct BodyEditorView: View {
             
             Divider()
 
-            // 🔹 Pure Canvas Workspace (Fixed the floating text by adding explicit internal padding)
             VStack(spacing: 0) {
                 TextEditor(text: $request.requestBody)
                     .font(.system(size: 13, weight: .regular, design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .background(Color.clear)
-                    // Pushes text context downwards and inwards to look crisp and structured
                     .padding(.top, 12)
                     .padding(.horizontal, 16)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -450,7 +445,6 @@ struct BodyEditorView: View {
                 Divider()
                     .padding(.horizontal, 16)
                 
-                // Fine-tuned Bottom Footer Row
                 HStack {
                     Text("Supports JSON, XML, or Plain Text. Drag files directly into editor.")
                         .font(.system(size: 10))
@@ -471,7 +465,7 @@ struct BodyEditorView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
-            .background(Color(nsColor: .textBackgroundColor)) // Maintains the unified view panels
+            .background(Color(nsColor: .textBackgroundColor))
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 if let provider = providers.first {
                     _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -511,6 +505,7 @@ struct BodyEditorView: View {
     }
 }
 
+// MARK: - AuthEditorView Layout Configuration
 struct AuthEditorView: View {
     @Bindable var request: APIRequest
     @State private var isSecure = true
@@ -518,7 +513,6 @@ struct AuthEditorView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // 🔹 MATCHING FLAT HEADER TOOLBAR
             HStack {
                 Text("Authentication Strategy")
                     .font(.subheadline.bold())
@@ -537,12 +531,11 @@ struct AuthEditorView: View {
                 .labelsHidden()
             }
             .padding(.horizontal, 16)
-            .frame(height: 34) // Identical row height to KVPairEditor
+            .frame(height: 34)
             .background(Color(nsColor: .controlBackgroundColor))
             
             Divider()
 
-            // 🔹 FLAT WORKSPACE CONTENT (No GroupBoxes / No Grey Backgrounds)
             VStack(alignment: .leading, spacing: 0) {
                 switch request.auth {
                 case .none:
@@ -556,7 +549,6 @@ struct AuthEditorView: View {
                 case .bearer, .basic, .apiKey:
                     List {
                         VStack(alignment: .leading, spacing: 12) {
-                            // Field Header Row
                             HStack {
                                 Text(authTitle)
                                     .font(.caption.bold())
@@ -564,7 +556,6 @@ struct AuthEditorView: View {
                                 
                                 Spacer()
                                 
-                                // 🔹 Inline Dynamic Copy Button
                                 Button(isCopied ? "Copied!" : "Copy Token") {
                                     copyToClipboard()
                                 }
@@ -575,7 +566,6 @@ struct AuthEditorView: View {
                             }
                             .padding(.top, 8)
                             
-                            // Clean Input Field Row matching KVPair rows
                             HStack(spacing: 12) {
                                 Image(systemName: "key.fill")
                                     .font(.caption)
@@ -605,7 +595,6 @@ struct AuthEditorView: View {
                             .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
                             .cornerRadius(6)
                             
-                            // Contextual Helper Text
                             Text(authDescription)
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
@@ -618,7 +607,7 @@ struct AuthEditorView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .background(Color(nsColor: .textBackgroundColor)) // Matches the pure white/dark background of your lists
+            .background(Color(nsColor: .textBackgroundColor))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }

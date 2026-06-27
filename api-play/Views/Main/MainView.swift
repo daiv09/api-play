@@ -48,7 +48,7 @@ struct MainView: View {
                                 request.updatedAt = Date()
                                 try? modelContext.save()
                             }
-                            .frame(minHeight: 200, maxHeight: .infinity)
+                            .frame(minHeight: 320, maxHeight: .infinity)
 
                             ZStack(alignment: .trailing) {
                                 ResponseView(request: request)

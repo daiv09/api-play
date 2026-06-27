@@ -6,70 +6,77 @@ struct CodeGenView: View {
     @Environment(AICoordinator.self) private var ai
     
     @State private var selectedLang: CodeLang = .curl
-    @State private var schemaResult: String = ""
-    @State private var isFetchingSchema = false
     @State private var showCopySuccess = false
     @State private var swiftModelResult: String = ""
     @State private var isGeneratingSwiftModel = false
 
     enum CodeLang: String, CaseIterable {
-        case curl = "cURL", swift = "Swift", python = "Python", javascript = "JS", swiftModel = "Models"
+        case curl = "cURL"
+        case swift = "Swift"
+        case python = "Python"
+        case javascript = "JS"
+        case swiftModel = "Models"
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // 🔹 ADAPTIVE HEADER
+            // 🔹 1. ADAPTIVE HEADER CONTROL BAR
             headerSection
-                .padding(.horizontal, 12)
-                .frame(height: 38, alignment: .center)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+                .frame(height: 48)
                 .background(.ultraThinMaterial)
 
             Divider()
-
-            // 🔥 GRAPHQL SCHEMA TOOLBAR
-            if request.requestType == .graphql {
-                graphqlToolbar
-                Divider()
-            }
             
-            // 🔥 AI SWIFT MODEL TOOLBAR
+            // 🔹 2. CONDITIONAL AI MODEL ENGINE BAR
             if selectedLang == .swiftModel {
                 swiftModelToolbar
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.4))
                 Divider()
             }
 
-            // 🔹 CODE DISPLAY AREA
+            // 🔹 3. CODE EDITOR WORKSPACE VIEWPORT
             ZStack(alignment: .topTrailing) {
                 ScrollView(.vertical) {
                     Text(displayContent())
                         .font(.system(.subheadline, design: .monospaced))
-                        // This is the key: forces text to wrap instead of growing wider
+                        .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(20)
-                        .padding(.trailing, 40) // Make room for the copy button
+                        .padding(.top, 16)
+                        .padding(.bottom, 24)
+                        .padding(.leading, 20)
+                        .padding(.trailing, 76) // Space for copy button
                         .textSelection(.enabled)
                 }
+                .scrollIndicators(.automatic)
                 .background(Color(nsColor: .textBackgroundColor))
                 
                 copyButton
+                    .padding(.top, 12)
+                    .padding(.trailing, 16)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             Divider()
 
-            // 🔹 RESPONSIVE FOOTER
+            // 🔹 4. GLOBAL VIEWPORT FOOTER STATUS
             footerSection
+                .padding(.horizontal, 16)
+                .frame(height: 32)
+                .background(.ultraThinMaterial)
         }
-        // Set a reasonable minimum width to prevent UI collapse
-        .frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity)
-        .onChange(of: request.lastResponse) { _, newValue in
-            if newValue != nil && selectedLang == .swiftModel {
+        .frame(minWidth: 550, minHeight: 450)
+        // Fixed .onChange blocks to use the standard single-argument syntax
+        .onChange(of: request.lastResponse) { newResponse in
+            if newResponse != nil && selectedLang == .swiftModel {
                 Task { await generateSwiftModels() }
             }
         }
-        .onChange(of: selectedLang) { _, newValue in
-            if newValue == .swiftModel && swiftModelResult.isEmpty && request.lastResponse != nil {
+        .onChange(of: selectedLang) { newLang in
+            if newLang == .swiftModel && swiftModelResult.isEmpty && request.lastResponse != nil {
                 Task { await generateSwiftModels() }
             }
         }
@@ -78,109 +85,78 @@ struct CodeGenView: View {
     // MARK: - Subviews
     
     private var headerSection: some View {
-        HStack {
-            headerLabel
-            Spacer(minLength: 20)
-            languagePicker.frame(width: 220)
-        }
-    }
-
-    private var headerLabel: some View {
-        Label("Code Snippet", systemImage: "chevron.left.forwardslash.chevron.right")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-    }
-
-    private var languagePicker: some View {
-        Picker("", selection: $selectedLang) {
-            ForEach(CodeLang.allCases, id: \.self) { lang in
-                Text(lang.rawValue).tag(lang)
-            }
-        }
-        .pickerStyle(.segmented)
-        .controlSize(.small)
-    }
-
-    private var graphqlToolbar: some View {
-        HStack {
-            Button(action: { Task { await fetchSchema() } }) {
-                Label(schemaResult.isEmpty ? "Introspect" : "Refresh",
-                      systemImage: "network.badge.shield.half.filled")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(isFetchingSchema)
-
-            if isFetchingSchema {
-                ProgressView().controlSize(.small).scaleEffect(0.7)
-            }
-
-            Spacer()
+        HStack(spacing: 12) {
+            Label("Code Snippet", systemImage: "chevron.left.forwardslash.chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.8))
+                .lineLimit(1)
             
-            if !schemaResult.isEmpty {
-                Button("Clear") { schemaResult = "" }
-                    .buttonStyle(.link)
-                    .font(.caption)
+            Spacer(minLength: 16)
+            
+            Picker("", selection: $selectedLang) {
+                ForEach(CodeLang.allCases, id: \.self) { lang in
+                    Text(lang.rawValue).tag(lang)
+                }
             }
+            .pickerStyle(.segmented)
+            .controlSize(.regular)
+            .frame(width: 280)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
     private var swiftModelToolbar: some View {
-        HStack {
+        HStack(spacing: 8) {
             if isGeneratingSwiftModel {
-                ProgressView().controlSize(.small).scaleEffect(0.7)
-                Text("Generating Swift Models...")
-                    .font(.caption)
+                ProgressView().controlSize(.small).scaleEffect(0.65)
+                Text("Analyzing payload and generating models...")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else if request.lastResponse == nil {
-                Text("⚠️ Send request first to auto-generate models")
-                    .font(.caption)
+                Text("⚠️ Send a network request first to auto-generate Swift models")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .foregroundStyle(.orange)
             } else {
-                Label("AI Auto-Generated Models", systemImage: "sparkles")
-                    .font(.caption)
+                Label("AI Auto-Generated Decodable Models", systemImage: "sparkles")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .foregroundStyle(.blue)
             }
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
     private var copyButton: some View {
         Button {
             copy(displayContent())
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
                 showCopySuccess = true
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 withAnimation { showCopySuccess = false }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Image(systemName: showCopySuccess ? "checkmark" : "doc.on.doc")
-                if !showCopySuccess { Text("Copy").font(.system(size: 10, weight: .bold)) }
+                    .font(.system(size: 11, weight: .semibold))
+                if !showCopySuccess {
+                    Text("Copy")
+                        .font(.system(size: 11, weight: .bold))
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
             .background(.ultraThinMaterial)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(.separator, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .padding(12)
-        .help("Copy code to clipboard")
     }
 
     private var footerSection: some View {
         HStack {
             Label {
-                Text(request.lastResponse != nil ? "Live Sync" : "Draft")
+                Text(request.lastResponse != nil ? "Synced with Response" : "Draft (No Live Context)")
                     .font(.system(size: 10, weight: .medium))
             } icon: {
                 Circle()
@@ -189,24 +165,17 @@ struct CodeGenView: View {
             }
             
             Spacer()
-            
-            Text(selectedLang.rawValue.uppercased())
-                .font(.system(size: 9, weight: .black))
-                .opacity(0.4)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
         .foregroundStyle(.secondary)
     }
 
-    // MARK: - Generation Logic
+    // MARK: - Core Execution Engine Logic
 
     private func displayContent() -> String {
         if selectedLang == .swiftModel {
             return swiftModelResult.isEmpty ? "// Swift Models will be generated here automatically when a response is received." : swiftModelResult
         }
-        return schemaResult.isEmpty ? generateCode() : schemaResult
+        return generateCode()
     }
 
     private func generateCode() -> String {
@@ -215,38 +184,57 @@ struct CodeGenView: View {
         case .swift: return swift()
         case .python: return python()
         case .javascript: return js()
-        case .swiftModel: return "" // Handled dynamically
+        case .swiftModel: return ""
         }
     }
 
-    private func curl() -> String {
+    private func getBodyPayload() -> String {
         if request.requestType == .graphql {
-            return """
-            curl -X POST "\(request.urlString)" \\
-              -H "Content-Type: application/json" \\
-              -d '{
-                "query": "\(escape(request.graphqlQuery))",
-                "variables": \(request.graphqlVariables.isEmpty ? "{}" : request.graphqlVariables)
-              }'
-            """
+            let variablesStr = request.graphqlVariables.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "{}" : request.graphqlVariables
+            return "{\"query\": \"\(escape(request.graphqlQuery))\", \"variables\": \(variablesStr)}"
         }
-        var cmd = "curl -X \(request.httpMethod.rawValue) \"\(request.urlString)\""
-        for h in request.headers where h.isEnabled {
+        return request.requestBody
+    }
+
+    private func curl() -> String {
+        let method = request.requestType == .graphql ? "POST" : request.httpMethod.rawValue
+        var cmd = "curl -X \(method) \"\(request.urlString)\""
+        
+        var standardHeaders = request.headers.filter { $0.isEnabled }
+        if request.requestType == .graphql && !standardHeaders.contains(where: { $0.key.lowercased() == "content-type" }) {
+            cmd += " \\\n  -H \"Content-Type: application/json\""
+        }
+        
+        for h in standardHeaders {
             cmd += " \\\n  -H \"\(h.key): \(h.value)\""
         }
-        if !request.requestBody.isEmpty {
-            cmd += " \\\n  -d '\(request.requestBody)'"
+        
+        let payload = getBodyPayload()
+        if !payload.isEmpty {
+            cmd += " \\\n  -d '\(payload)'"
         }
         return cmd
     }
 
     private func swift() -> String {
-        """
+        let method = request.requestType == .graphql ? "POST" : request.httpMethod.rawValue
+        let payload = getBodyPayload()
+        
+        var bodySnippet = ""
+        if !payload.isEmpty {
+            bodySnippet = """
+            \nrequest.httpBody = \"\"\"
+            \(payload)
+            \"\"\".data(using: .utf8)
+            """
+        }
+        
+        return """
         import Foundation
 
         var request = URLRequest(url: URL(string: "\(request.urlString)")!)
-        request.httpMethod = "\(request.httpMethod.rawValue)"
-        \(headersSwift())
+        request.httpMethod = "\(method)"
+        \(request.requestType == .graphql ? "request.setValue(\"application/json\", forHTTPHeaderField: \"Content-Type\")\n" : "")\(headersSwift())\(bodySnippet)
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let data = data {
@@ -258,20 +246,33 @@ struct CodeGenView: View {
     }
 
     private func python() -> String {
-        """
+        let method = request.requestType == .graphql ? "POST" : request.httpMethod.rawValue
+        let payload = getBodyPayload()
+        
+        // 🛠️ FIX: Removed the invalid stray escape character sequence here
+        var hMap = request.headers.filter { $0.isEnabled }.map { "    \"\($0.key)\": \"\($0.value)\"," }.joined(separator: "\n")
+        if request.requestType == .graphql && !request.headers.contains(where: { $0.key.lowercased() == "content-type" }) {
+            hMap = "    \"Content-Type\": \"application/json\",\n" + hMap
+        }
+        
+        var dataArg = "data=None"
+        if !payload.isEmpty {
+            dataArg = "data=\"\"\"\(payload)\"\"\""
+        }
+
+        return """
         import requests
-        import json
 
         url = "\(request.urlString)"
         headers = {
-        \(headersPython())
+        \(hMap)
         }
 
         response = requests.request(
-            "\(request.httpMethod.rawValue)",
+            "\(method)",
             url,
             headers=headers,
-            data=\(request.requestBody.isEmpty ? "None" : "json.dumps(" + request.requestBody + ")")
+            \(dataArg)
         )
 
         print(response.text)
@@ -279,60 +280,39 @@ struct CodeGenView: View {
     }
 
     private func js() -> String {
-        """
+        let method = request.requestType == .graphql ? "POST" : request.httpMethod.rawValue
+        let payload = getBodyPayload()
+        
+        var hMap = request.headers.filter { $0.isEnabled }.map { "        \"\($0.key)\": \"\($0.value)\"," }.joined(separator: "\n")
+        if request.requestType == .graphql && !request.headers.contains(where: { $0.key.lowercased() == "content-type" }) {
+            hMap = "        \"Content-Type\": \"application/json\",\n" + hMap
+        }
+        
+        var bodyArg = "body: null"
+        if !payload.isEmpty {
+            bodyArg = "body: `\(payload)`"
+        }
+
+        return """
         fetch("\(request.urlString)", {
-            method: "\(request.httpMethod.rawValue)",
+            method: "\(method)",
             headers: {
-                "Content-Type": "application/json",
-                \(headersJS())
+        \(hMap)
             },
-            body: \(request.requestBody.isEmpty ? "null" : "JSON.stringify(" + request.requestBody + ")")
+            \(bodyArg)
         })
         .then(res => res.json())
-        .then(console.log);
+        .then(console.log)
+        .catch(console.error);
         """
     }
 
-    // MARK: - Helpers
+    // MARK: - String Extensions & Format Helpers
 
     private func headersSwift() -> String {
         request.headers.filter { $0.isEnabled }
             .map { "request.setValue(\"\($0.value)\", forHTTPHeaderField: \"\($0.key)\")" }
             .joined(separator: "\n")
-    }
-
-    private func headersPython() -> String {
-        request.headers.filter { $0.isEnabled }
-            .map { "    \"\($0.key)\": \"\($0.value)\"," }
-            .joined(separator: "\n")
-    }
-
-    private func headersJS() -> String {
-        request.headers.filter { $0.isEnabled }
-            .map { "        \"\($0.key)\": \"\($0.value)\"," }
-            .joined(separator: "\n")
-    }
-
-    private func fetchSchema() async {
-        guard let url = URL(string: request.urlString) else { return }
-        isFetchingSchema = true
-        defer { isFetchingSchema = false }
-
-        let introspectionQuery = "{ \"query\": \"{ __schema { types { name } } }\" }"
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.httpBody = introspectionQuery.data(using: .utf8)
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        do {
-            let (data, _) = try await URLSession.shared.data(for: req)
-            if let json = try? JSONSerialization.jsonObject(with: data),
-               let prettyData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted) {
-                schemaResult = String(data: prettyData, encoding: .utf8) ?? "Schema empty"
-            }
-        } catch {
-            schemaResult = "Error: \(error.localizedDescription)"
-        }
     }
 
     private func generateSwiftModels() async {
@@ -344,12 +324,15 @@ struct CodeGenView: View {
             let code = try await ai.generateSwiftModel(from: response.body)
             swiftModelResult = code
         } catch {
-            swiftModelResult = "// Error generating models: \(error.localizedDescription)"
+            swiftModelResult = "// Error executing structural codegen task:\n// \(error.localizedDescription)"
         }
     }
 
     private func escape(_ text: String) -> String {
-        text.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: "\\n")
+        text.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "")
     }
 
     private func copy(_ text: String) {

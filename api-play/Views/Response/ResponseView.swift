@@ -475,6 +475,8 @@ struct ResponseView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
+        // FORCE the ScrollView to fill the vertical and horizontal space
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func rawContentView(content: String) -> some View {
@@ -482,6 +484,8 @@ struct ResponseView: View {
             .font(.system(size: 12, design: .monospaced))
             .scrollContentBackground(.hidden)
             .padding(8)
+            // FORCE the TextEditor to expand cleanly with the window resize
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func headersContentView(headers: [String: String]) -> some View {
@@ -492,9 +496,11 @@ struct ResponseView: View {
                     Text(value).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                 }
             }
-        }.listStyle(.inset)
+        }
+        .listStyle(.inset)
+        // FORCE the List container layout behavior to stay consistent
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
     private func footerStatusBar(for response: APIResponse) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "info.circle")
