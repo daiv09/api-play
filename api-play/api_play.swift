@@ -102,10 +102,10 @@ struct api_playApp: App {
             }
         }
         
-        MenuBarExtra("Quick Request", systemImage: "bolt.fill") {
-            QuickRequestView()
-                .modelContainer(sharedModelContainer)
-        }
-        .menuBarExtraStyle(.window)
+        MenuBarExtra("Quick Request", systemImage: "network") {
+                    QuickRequestView()
+                        .modelContainer(sharedModelContainer)
+                }
+                .menuBarExtraStyle(.window)
     }
 }

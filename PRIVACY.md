@@ -1,129 +1,67 @@
 # Privacy Policy for api-play
 
-**Effective Date:** 13-06-2026 <br>
-**App Name:** api-play <br>
-**Platform:** macOS
+**Last Updated: July 2026**
+
+At `api-play`, we believe that your development configurations, security credentials, and application payloads belong exclusively to you. This application has been engineered from the ground up to operate under a strict **local-first paradigm**. This document serves as our binding commitment to data locality, absolute zero-telemetry, and the preservation of digital privacy during programmatic testing.
 
 ---
 
-## 1. Our Privacy Philosophy
+## 1. Architectural Blueprint & Data Locality
 
-Privacy is not an afterthought in api-play — it is a foundational design
-principle. api-play is a native macOS developer tool for configuring,
-sending, and organizing REST, GraphQL, and WebSocket network requests.
+`api-play` executes all runtime operations, data updates, and persistent state management locally within your physical machine's isolated application sandbox. The software does not communicate with any external proprietary cloud storage, synchronization servers, or backend databases managed by `api-play` or its creators.
 
-We believe that the requests you build, the credentials you use, and the
-configurations you create are exclusively yours. api-play is designed so
-that this information remains entirely under your control, on your own
-device, at all times. The developer of api-play has no access to, and does
-not want access to, any of your data, requests, or settings.
+| Data Category | Storage Mechanism | Storage Location | Data Retention Policy |
+| :--- | :--- | :--- | :--- |
+| **API Requests & Collections** | SwiftData / CoreData Engine | Local Application Sandbox | Permanent until deleted by user |
+| **Auth Tokens & Private Keys** | Encrypted Sandbox Storage | On-Device Key Containers | Permanent until deleted by user |
+| **Active Environment Variables** | SwiftData Core Records | On-Device Key Containers | Permanent until deleted by user |
+| **Time-Travel Diff States** | Relational Graph Entries | Local Application Sandbox | User-configurable history limits |
 
----
-
-## 2. Zero Data Collection & Analytics
-
-api-play does **not** collect any personal data, usage data, or diagnostic
-information from you or your device.
-
-Specifically, api-play does **not** include or use:
-
-- Third-party analytics SDKs or trackers
-- Crash reporting or diagnostics frameworks
-- Remote telemetry of any kind
-- Advertising identifiers or advertising networks
-- Any mechanism that transmits usage metrics, behavioral data, or device
-  information to the developer or to any third party
-
-No information about how you use api-play — including which requests you
-run, which APIs you connect to, or how the app is configured — is ever
-collected, logged remotely, or transmitted anywhere. Your activity within
-the app is known only to you and to your Mac.
+### Remote Synchronization Boundaries
+Your application data is bound to your physical disk. Cloud backup routines occur only if:
+1. You explicitly choose to utilize native operating system backup suites (e.g., Apple Time Machine).
+2. You manually enable iCloud Drive container state replication within your system level preferences.
 
 ---
 
-## 3. Local-Only Storage
+## 2. Absolute Zero-Telemetry Protocol
 
-All data created, imported, or managed within api-play is stored
-**exclusively on your local Mac storage volume**, using Apple's SwiftData
-framework within the app's sandboxed container.
+We maintain a complete firewall against tracking software, analytics frameworks, and marketing surveillance metrics.
 
-This includes, without limitation:
-
-- Request collections, folders, and individual requests (REST, GraphQL,
-  and WebSocket configurations)
-- Environment definitions and environment variables
-- Request history, version snapshots, and commit diffs
-- Application preferences and configuration settings
-- Imported data, such as HAR files you choose to bring into the app
-
-None of this information is synced to, backed up to, or transmitted to any
-server operated by the developer. api-play does not operate any backend
-infrastructure, and there is no "account" or "cloud sync" system of any
-kind. If you delete api-play or its application data, this information is
-permanently removed from your device.
+* **No Third-Party Analytics SDKs:** The application binary entirely excludes structural collection SDKs from tracking aggregators, including but not limited to Firebase, Mixpanel, Segment, or Google Analytics.
+* **No Behavioral Event Tracking:** We do not record, intercept, or map out interface execution metrics. Your layout adaptations, window states, execution triggers, and operational patterns are strictly confidential to your local display engine.
+* **Anonymized System Crash Reporting:** Diagnostic crash debugging is strictly passive. `api-play` does not silently dispatch independent diagnostic logs. System crash captures are funneled solely through Apple’s system-level, opt-in macOS Analytics pipeline.
 
 ---
 
-## 4. Security of Sensitive Data
+## 3. Intelligent Processing & AI Privacy Firewalls
 
-api-play takes additional precautions with data that is sensitive in
-nature:
+`api-play` includes powerful natural language processing mechanisms, automation triggers, and multi-modal ingestion systems designed to accelerate modern API engineering. These components are strictly insulated to maintain a strict data boundary:
 
-- **OAuth tokens:** Where api-play's automatic authentication-refresh
-  feature is used, access and refresh tokens are stored using the macOS
-  **Keychain**, Apple's secure, system-level credential storage,
-  rather than in the application's general data store.
-- **Authorization headers, API keys, and other credentials you enter:**
-  These values are stored locally within api-play's sandboxed application
-  container on your Mac. They are never transmitted to the developer, and
-  they remain isolated from other applications by macOS App Sandbox
-  protections. Values you mark as sensitive are masked in the user
-  interface by default.
+### On-Device Vision Engine (OCR Link Extraction)
+When an image containing text, links, or cURL instructions is dragged and dropped directly into the sidebar, processing is handled natively by Apple’s secure **Vision Framework**. The image arrays are broken down using your machine's local Neural Engine. This data remains completely offline and is discarded from memory immediately after structural request conversion.
 
-In all cases, this information stays on your device and is used solely to
-construct the network requests you explicitly choose to send.
+### AI Client Agent & Natural Language Adjustments
+* **Direct Handshake Routing:** Commands passed to the integrated AI Assistant interface to alter headers, append variables, or generate requests are sent directly to your user-configured API endpoints.
+* **Zero Model Training Exposure:** We do not intercept, collect, cache, or scan your textual prompts, schema properties, or generated code snippets. Your engineering telemetry is never used for external artificial intelligence model training, reinforcement learning, or human review.
 
 ---
 
-## 5. Third-Party Network Interaction
+## 4. Network Isolation & Operational Security
 
-api-play does not communicate with any servers operated by the developer,
-and does not route your traffic through any third-party intermediary.
+The application limits its network footprint exclusively to outbound debugging pipelines initiated directly by user interaction.
 
-The **only** network connections api-play makes are the ones **you
-explicitly initiate** — for example, by pressing "Send" on a REST request,
-executing a GraphQL operation, or opening a WebSocket connection.
+### Outbound Client Dispatches
+When executing a REST, GraphQL, or raw HTTP/HTTPS protocol request, traffic is routed cleanly from your workspace directly to the designated remote server. We do not use intermediary reverse-proxies, custom cloud gateways, or corporate log relays. Your data packets remain untampered and unmonitored.
 
-In each case:
+### Local Webhook Interceptor Sandbox
+The integrated webhook testing utility binds natively and uniquely to your internal loopback adapter:
+```http
+http://localhost:8080
+```
 
-- The connection is made directly between your Mac and the specific host
-  or endpoint **you have defined** within your request configuration.
-- No request data, response data, headers, or payloads are copied,
-  logged, or transmitted to the developer or to any analytics or
-  monitoring service.
-- The app's local webhook receiver, when enabled, listens only for
-  incoming connections that you choose to direct to it (e.g., from your
-  own testing tools), and does not expose any data beyond your local
-  network configuration.
+This listener operates purely as an internal local loopback server. It is entirely unexposed to external internet discovery, public port-forwarding networks, or local area network configurations unless explicitly exposed by the developer using third-party tunneling software.
 
-Any data that is sent to or received from third-party API providers as a
-result of requests you build is governed by **that provider's own privacy
-policy**, not by api-play.
-
----
-
-## 6. Changes to This Policy
-
-We may update this Privacy Policy from time to time to reflect changes to
-the application or for other operational, legal, or regulatory reasons.
-Any changes will be reflected by an updated "Effective Date" at the top of
-this document. We encourage you to review this policy periodically.
-
-## 7. Contact Us
-
-If you have any questions, concerns, or feedback regarding this Privacy
-Policy or api-play's data practices, please contact:
-
-**Developer:** Daiwiik Harihar <br>
-**Email:** daiwiikharihar17147@gmail.com <br>
-**Repository:** [daiv09/api-play](https://github.com/daiv09/api-play)
+## 5. Administration, Compliance, & Disclosures
+Because `api-play` enforces an authentic local-first framework, we do not register user accounts, manage cloud profiles, or maintain databases containing personal, identifiable, or transactional developer information.
+Consequently, we have no mechanism to store, modify, or delete your user parameters upon request. You hold absolute, autonomous authority over your data profile. For core structural inquiries regarding code safety or to file an architectural ticket, please interface directly with our official technical team via the repository's GitHub Issues tracker.

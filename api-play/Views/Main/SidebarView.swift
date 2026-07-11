@@ -579,8 +579,8 @@ struct RequestRow: View {
                         .font(.system(size: 8, weight: .bold))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
-                        .background(isSelected ? .white.opacity(0.2) : .blue.opacity(0.1))
-                        .foregroundStyle(isSelected ? .white : .blue)
+                        .background(.blue.opacity(0.1))
+                        .foregroundStyle(.white)
                         .cornerRadius(4)
                 }
             }
