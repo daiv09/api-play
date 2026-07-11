@@ -293,15 +293,34 @@ struct ResponseView: View {
     }
     
     private func captureFallbackSnapshot() -> NSImage {
-        let view = NSApplication.shared.windows.first?.contentView
-        let imageRep = view?.bitmapImageRepForCachingDisplay(in: view?.bounds ?? .zero)
-        if let rep = imageRep {
-            view?.cacheDisplay(in: view?.bounds ?? .zero, to: rep)
-            let image = NSImage(size: view?.bounds.size ?? .zero)
-            image.addRepresentation(rep)
-            return image
-        }
-        return NSImage()
+        // 1. Establish a clear, safe fallback rect frame size
+        let targetSize = NSSize(width: 600, height: 400)
+        let image = NSImage(size: targetSize)
+        
+        // 2. Lock the current drawing context strictly within our own process memory heap
+        image.lockFocus()
+        
+        // 3. Draw a safe UI backdrop that mimics the current background context
+        NSColor.windowBackgroundColor.set()
+        NSRect(origin: .zero, size: targetSize).fill()
+        
+        // 4. (Optional) Write a localized UI string so the framework knows it's a structural fallback
+        let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        let color = NSColor.secondaryLabelColor
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        
+        let textStr = "Processing visual snapshot..."
+        let textSize = textStr.size(withAttributes: attrs)
+        let textPoint = NSPoint(
+            x: (targetSize.width - textSize.width) / 2,
+            y: (targetSize.height - textSize.height) / 2
+        )
+        
+        textStr.draw(at: textPoint, withAttributes: attrs)
+        
+        // 5. Unlock context safely and hand back the clean NSImage layout
+        image.unlockFocus()
+        return image
     }
     
     private func findWebView(in view: NSView) -> WKWebView? {
