@@ -4,7 +4,7 @@ import SwiftData
 #if os(macOS)
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false
+        return true
     }
 }
 #endif
@@ -98,7 +98,6 @@ struct api_playApp: App {
             CommandGroup(after: .help) {
                 Divider()
                 Button("Check AI Engine Status") {
-                    print("AI Availability: \(aiCoordinator.isAnalyzing)")
                 }
             }
         }

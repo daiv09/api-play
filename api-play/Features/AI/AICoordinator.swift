@@ -76,7 +76,6 @@ class AICoordinator {
         //    This prevents the AI from picking up unrelated database requests and chaining them.
         let goalContainsURL = goalHasURL(resolvedGoal)
         if goalContainsURL {
-            print("ℹ️ Goal contains a direct URL — using focused single-step heuristic planner.")
             return try planAgentTaskHeuristically(goal: goal, availableRequests: availableRequests, activeRequest: activeRequest)
         }
         
@@ -85,11 +84,9 @@ class AICoordinator {
             do {
                 return try await planAgentTaskWithAI(goal: goal, availableRequests: availableRequests, activeRequest: activeRequest)
             } catch {
-                print("⚠️ On-device LLM failed to plan. Falling back to heuristic planner. Error: \(error)")
                 return try planAgentTaskHeuristically(goal: goal, availableRequests: availableRequests, activeRequest: activeRequest)
             }
         } else {
-            print("ℹ️ Apple Intelligence is unavailable on this device. Using heuristic planner.")
             return try planAgentTaskHeuristically(goal: goal, availableRequests: availableRequests, activeRequest: activeRequest)
         }
     }
@@ -189,7 +186,6 @@ class AICoordinator {
         
         guard let firstBracket = rawContent.firstIndex(of: "["),
               let lastBracket = rawContent.lastIndex(of: "]") else {
-            print("🤖 Foundation Model Response: \(rawContent)")
             throw NSError(domain: "AICoordinator", code: 2, userInfo: [NSLocalizedDescriptionKey: "AI did not return a valid JSON array format."])
         }
         

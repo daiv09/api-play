@@ -238,7 +238,6 @@ struct CodeGenView: View {
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let data = data {
-                print(String(data: data, encoding: .utf8) ?? "")
             }
         }
         task.resume()
@@ -275,7 +274,6 @@ struct CodeGenView: View {
             \(dataArg)
         )
 
-        print(response.text)
         """
     }
 
@@ -321,8 +319,23 @@ struct CodeGenView: View {
         defer { isGeneratingSwiftModel = false }
         
         do {
-            let code = try await ai.generateSwiftModel(from: response.body)
-            swiftModelResult = code
+            var code = try await ai.generateSwiftModel(from: response.body)
+            
+            // 🧼 1. Strip leading markdown wrappers
+            if code.hasPrefix("```swift") {
+                code = String(code.dropFirst("```swift".count))
+            } else if code.hasPrefix("```") {
+                code = String(code.dropFirst("```".count))
+            }
+            
+            // 🧼 2. Strip trailing markdown wrappers
+            if code.hasSuffix("```") {
+                code = String(code.dropLast(3))
+            }
+            
+            // 🧼 3. Clean up leading/trailing white space and newlines
+            swiftModelResult = code.trimmingCharacters(in: .whitespacesAndNewlines)
+            
         } catch {
             swiftModelResult = "// Error executing structural codegen task:\n// \(error.localizedDescription)"
         }

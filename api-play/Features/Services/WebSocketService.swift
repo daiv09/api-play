@@ -41,7 +41,6 @@ class WebSocketService {
         self.status = .connected
         self.isConnected = true
         
-        print("📡 WebSocket Connected to: \(url.absoluteString)")
     }
     
     /// Disconnects from the server
@@ -50,7 +49,6 @@ class WebSocketService {
         webSocketTask = nil
         status = .disconnected
         isConnected = false
-        print("📡 WebSocket Disconnected")
     }
     
     /// Sends a text message
@@ -59,7 +57,6 @@ class WebSocketService {
         
         webSocketTask?.send(message) { [weak self] error in
             if let error = error {
-                print("❌ WebSocket Send Error: \(error.localizedDescription)")
             } else {
                 Task { @MainActor [weak self] in
                     self?.messages.append(WebSocketMessage(content: text, isOutgoing: true))
@@ -79,7 +76,6 @@ class WebSocketService {
                     self?.status = .error(error.localizedDescription)
                     self?.isConnected = false
                 }
-                print("❌ WebSocket Receive Error: \(error)")
                 
             case .success(let message):
                 switch message {

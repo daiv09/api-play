@@ -32,7 +32,8 @@ struct SidebarView: View {
             Divider()
 
             List(selection: $selectedRequest) {
-                Section {
+                Spacer()
+                Section("Collections") {
                     if topLevelFolders.isEmpty {
                         Text("No Collections").font(.caption).foregroundStyle(.tertiary)
                     } else {
@@ -40,9 +41,6 @@ struct SidebarView: View {
                             FolderDisclosure(folder: folder, selectedRequest: $selectedRequest, renamingRequestID: $renamingRequestID)
                         }
                     }
-                } header: {
-                    Text("Collections")
-                        .padding(.top, 12)
                 }
 
                 Section("Requests") {
@@ -61,9 +59,6 @@ struct SidebarView: View {
                     WebhookSidebarModule()
                 }
             }
-            .listStyle(.sidebar)
-            .frame(minHeight: 0) // 1. CRITICAL: Allows List to shrink infinitely instead of resisting and causing layout clipping
-            .environment(\.controlActiveState, .active)
             .alert("Import Failed", isPresented: Binding(
                 get: { imageDropError != nil },
                 set: { if !$0 { imageDropError = nil } }
@@ -72,6 +67,7 @@ struct SidebarView: View {
             } message: {
                 Text(imageDropError ?? "")
             }
+            .listStyle(.sidebar)
             .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
                 if handleImageDrop(providers: providers) { return true }
                 if handleFileDrop(providers: providers) { return true }
@@ -88,9 +84,6 @@ struct SidebarView: View {
                 }
             }
         }
-        .padding(.bottom, 16) // 2. Strict, non-negotiable bottom margin clearance wrapper
-        // 3. Move the constraint modifications to the absolute root level container
-        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
         .searchable(text: $searchText, placement: .sidebar)
         .alert("New Folder", isPresented: $isAddingFolder) {
             TextField("Name", text: $newNameBuffer)
@@ -111,20 +104,29 @@ struct SidebarView: View {
             }
         }
     }
-
-    // MARK: - Fixed Subview Alignment
+    
     private var environmentHeader: some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 4) {
-                Image(systemName: "server.rack")
-                    .font(.system(size: 10, weight: .bold))
-                Text("Environment")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Environment", systemImage: "server.rack")
                     .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                if selectedEnvironment != nil {
+                    Button {
+                        isEditingEnv = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit Environment Properties")
+                }
             }
-            .foregroundStyle(.secondary)
-            .fixedSize()
-            
-            Spacer(minLength: 8)
+            .frame(maxWidth: .infinity)
             
             Picker("", selection: $selectedEnvironment) {
                 Text("Global").tag(Optional<APIEnvironment>.none)
@@ -133,23 +135,9 @@ struct SidebarView: View {
             }
             .labelsHidden()
             .controlSize(.small)
-            .frame(minWidth: 90, maxWidth: 140)
-
-            if selectedEnvironment != nil {
-                Button {
-                    isEditingEnv = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Edit Environment Properties")
-            }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 38, alignment: .center)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var topLevelFolders: [RequestFolder] { folders.filter { $0.parent == nil }.sorted { $0.order < $1.order } }
@@ -195,14 +183,18 @@ struct SidebarView: View {
                     return
                 }
                 let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
-                Task { @MainActor in
-                    defer { isProcessingImage = false }
+                Task {
+                    defer { DispatchQueue.main.async { isProcessingImage = false } }
                     do {
                         let newReq = try await aiCoordinator.parseImageToRequest(text: text)
-                        modelContext.insert(newReq)
-                        selectedRequest = newReq
+                        await MainActor.run {
+                            modelContext.insert(newReq)
+                            selectedRequest = newReq
+                        }
                     } catch {
-                        imageDropError = "Couldn't import this image: \(error.localizedDescription)"
+                        await MainActor.run {
+                            imageDropError = "Couldn't import this image: \(error.localizedDescription)"
+                        }
                     }
                 }
             }
@@ -227,7 +219,6 @@ struct SidebarView: View {
                             modelContext.insert(req)
                         }
                     } catch {
-                        print("Failed to parse HAR: \(error)")
                     }
                 }
             }
@@ -238,11 +229,20 @@ struct SidebarView: View {
 
 // MARK: - Webhook Sidebar Module
 struct WebhookSidebarModule: View {
+    @Environment(\.modelContext) private var modelContext
     @Environment(WebhookService.self) private var webhookService
-    @State private var isExpanded: Bool = false
+    @State private var isExpanded: Bool = true
+    @State private var selectedPayloadForInspector: WebhookPayload?
+
+    private var sortedPayloads: [WebhookPayload] {
+        webhookService.payloads
+            .sorted(by: { $0.timestamp > $1.timestamp })
+            .prefix(15)
+            .map { $0 }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Circle()
                     .fill(webhookService.isListening ? Color.green : Color.red)
@@ -266,32 +266,109 @@ struct WebhookSidebarModule: View {
                 .foregroundStyle(webhookService.isListening ? .red : .blue)
             }
             .padding(.vertical, 4)
+            .padding(.bottom, 2)
 
             if !webhookService.payloads.isEmpty {
-                DisclosureGroup("Recent Payloads (\(webhookService.payloads.count))", isExpanded: $isExpanded) {
-                    ForEach(webhookService.payloads.prefix(5)) { payload in
-                        WebhookSidebarRow(payload: payload)
+                DisclosureGroup("Recent Incoming Hits (\(webhookService.payloads.count))", isExpanded: $isExpanded) {
+                    VStack(spacing: 2) {
+                        ForEach(sortedPayloads, id: \.id) { payload in
+                            WebhookSidebarRow(payload: payload) {
+                                selectedPayloadForInspector = payload
+                            } onSaveAsRequest: {
+                                convertWebhookToRequest(payload)
+                            }
+                        }
+                        
+                        Divider().padding(.vertical, 4)
+                        
+                        Button(action: { webhookService.clearPayloads() }) {
+                            Label("Clear Live Payloads Log", systemImage: "trash")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    
-                    Button("Clear All") {
-                        webhookService.clearPayloads()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
                 }
                 .font(.caption)
             } else if webhookService.isListening {
-                Text("Waiting for requests...")
+                Text("Waiting for network requests...")
                     .font(.caption.italic())
                     .foregroundStyle(.tertiary)
+                    .padding(.leading, 4)
+            }
+        }
+        .sheet(item: $selectedPayloadForInspector) { payload in
+            WebhookPayloadInspectorView(payload: payload)
+        }
+    }
+
+    private func convertWebhookToRequest(_ payload: WebhookPayload) {
+        let mappedMethod = HTTPMethod(rawValue: payload.method.uppercased()) ?? .GET
+        let newRequest = APIRequest(name: "Webhook: \(payload.path.isEmpty ? "/" : payload.path)")
+        newRequest.urlString = payload.path
+        newRequest.httpMethod = mappedMethod
+        
+        modelContext.insert(newRequest)
+        try? modelContext.save()
+    }
+}
+
+// MARK: - Webhook Sidebar Row
+struct WebhookSidebarRow: View {
+    let payload: WebhookPayload
+    var onSelect: () -> Void
+    var onSaveAsRequest: () -> Void
+    
+    @State private var isHovering = false
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: onSelect) {
+                HStack(spacing: 6) {
+                    Text(payload.method)
+                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                        .foregroundStyle(methodColor(payload.method))
+                        .frame(width: 36, alignment: .leading)
+                    
+                    Text(payload.path.isEmpty ? "/" : payload.path)
+                        .font(.system(size: 11, design: .monospaced))
+                        .lineLimit(1)
+                        .foregroundStyle(.primary)
+                    
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+            
+            if isHovering {
+                Button(action: onSaveAsRequest) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+                .help("Save to Requests List")
+            } else {
+                Text(payload.timestamp, style: .time)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary.opacity(0.8))
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+        .cornerRadius(4)
+        .onHover { hovering in
+            withAnimation(.easeIn(duration: 0.1)) {
+                self.isHovering = hovering
             }
         }
     }
     
     private func methodColor(_ method: String) -> Color {
-        switch method {
+        switch method.uppercased() {
         case "GET": return .green
         case "POST": return .orange
         case "PUT": return .blue
@@ -301,82 +378,66 @@ struct WebhookSidebarModule: View {
     }
 }
 
-struct WebhookSidebarRow: View {
+struct WebhookPayloadInspectorView: View {
     let payload: WebhookPayload
-    @State private var showDetails = false
-
+    @Environment(\.dismiss) private var dismiss
+    
     var body: some View {
-        Button {
-            showDetails.toggle()
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    textMethodLabel
-                    Text(payload.path)
-                        .font(.system(size: 10, design: .monospaced))
-                        .lineLimit(1)
+        NavigationStack {
+            Form {
+                Section("Request Information") {
+                    LabeledContent("HTTP Method", value: payload.method)
+                    LabeledContent("Target Endpoint URL Path", value: payload.path)
+                    LabeledContent("Received Timestamp", value: payload.timestamp.description)
                 }
-            }
-            .padding(.vertical, 2)
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showDetails, arrowEdge: .trailing) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("\(payload.method) \(payload.path)")
-                    .font(.headline)
-                
-                Text(payload.timestamp, style: .time)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                Divider()
                 
                 if !payload.headers.isEmpty {
-                    Text("Headers").font(.caption.bold())
-                    ScrollView {
-                        ForEach(Array(payload.headers.keys.sorted()), id: \.self) { key in
-                            HStack(alignment: .top) {
-                                Text(key).font(.caption).foregroundStyle(.secondary)
-                                Spacer()
-                                Text(payload.headers[key] ?? "").font(.caption).textSelection(.enabled)
+                    Section("HTTP Headers (\(payload.headers.count))") {
+                        List {
+                            ForEach(Array(payload.headers.keys.sorted()), id: \.self) { key in
+                                HStack(alignment: .top) {
+                                    Text(key)
+                                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                    Spacer(minLength: 20)
+                                    Text(payload.headers[key] ?? "")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .multilineTextAlignment(.trailing)
+                                        .textSelection(.enabled)
+                                }
                             }
                         }
+                        .frame(minHeight: 120, maxHeight: 180)
                     }
-                    .frame(maxHeight: 100)
-                    Divider()
                 }
                 
-                if !payload.body.isEmpty {
-                    Text("Body").font(.caption.bold())
-                    ScrollView {
-                        Text(payload.body)
-                            .font(.system(size: 10, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                Section("Payload Data Message Body Context") {
+                    if !payload.body.isEmpty {
+                        ScrollView(.vertical) {
+                            Text(payload.body)
+                                .font(.system(size: 11, design: .monospaced))
+                                .textSelection(.enabled)
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .cornerRadius(6)
+                        .frame(minHeight: 180, maxHeight: 300)
+                    } else {
+                        Text("No Body Content Payload Found (Empty Stream Request)")
+                            .font(.caption.italic())
+                            .foregroundStyle(.tertiary)
                     }
-                    .frame(maxHeight: 200)
-                } else {
-                    Text("No Body").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding()
-            .frame(width: 300)
-        }
-    }
-    
-    private var textMethodLabel: some View {
-        Text(payload.method)
-            .font(.system(size: 8, weight: .bold, design: .monospaced))
-            .foregroundStyle(methodColor(payload.method))
-    }
-    
-    private func methodColor(_ method: String) -> Color {
-        switch method {
-        case "GET": return .green
-        case "POST": return .orange
-        case "PUT": return .blue
-        case "DELETE": return .red
-        default: return .secondary
+            .formStyle(.grouped)
+            .navigationTitle("Webhook Inspector Details")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Dismiss Log View") { dismiss() }
+                }
+            }
+            .frame(width: 480, height: 520)
         }
     }
 }
@@ -459,7 +520,7 @@ struct FolderDisclosure: View {
                     FolderDisclosure(folder: child, selectedRequest: $selectedRequest, renamingRequestID: $renamingRequestID)
                 }
             }
-            if let requests = folder.requests?.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            if let requests = folder.requests?.sorted(by: { $0.name < $1.name }) {
                 ForEach(requests) { request in
                     RequestRow(request: request, isSelected: selectedRequest?.id == request.id,
                                isRenaming: renamingRequestID == request.id,
@@ -486,6 +547,7 @@ struct FolderDisclosure: View {
     }
 }
 
+// MARK: - REQUEST ROW
 struct RequestRow: View {
     @Bindable var request: APIRequest
     var isSelected: Bool
@@ -497,7 +559,8 @@ struct RequestRow: View {
         HStack(spacing: 8) {
             Text(request.httpMethod.rawValue)
                 .font(.system(size: 8, weight: .black, design: .monospaced))
-                .foregroundStyle(isSelected ? .white : methodColor)
+                .foregroundStyle(.white)
+                .colorMultiply(isSelected ? .white : methodColor)
                 .frame(width: 38, alignment: .leading)
 
             if isRenaming {

@@ -36,7 +36,6 @@ class WebhookService {
                         self?.isListening = true
                         self?.errorMessage = nil
                     case .failed(let error):
-                        print("Webhook listener failed: \(error)")
                         self?.isListening = false
                         if case .posix(let code) = error, code == .EADDRINUSE {
                             self?.errorMessage = "Port \(self?.port ?? 8080) is already in use by another application. Please choose a different port."
@@ -59,7 +58,6 @@ class WebhookService {
         } catch {
             self.errorMessage = error.localizedDescription
             self.isListening = false
-            print("Failed to start webhook listener: \(error)")
         }
     }
     
@@ -84,7 +82,6 @@ class WebhookService {
             guard let self = self else { return }
             
             if let error = error {
-                print("Error receiving data: \(error)")
                 connection.cancel()
                 return
             }

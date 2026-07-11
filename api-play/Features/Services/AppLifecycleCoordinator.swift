@@ -25,7 +25,6 @@ class AppLifecycleCoordinator {
         self.aiCoordinator = aiCoordinator
         self.webhookService = webhookService
         
-        print("🚀 Starting app setup")
         
         self.state = .initializingSwiftData
         // Ensure SwiftData container is initialized
@@ -57,7 +56,6 @@ class AppLifecycleCoordinator {
     
     @MainActor
     func shutdown() {
-        print("🛑 Shutting down app...")
         // Stop all background listeners and tasks gracefully
         webhookService?.stopListening()
         

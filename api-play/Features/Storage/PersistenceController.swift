@@ -31,7 +31,6 @@ class PersistenceController {
             // We use a do-catch block because model migration can sometimes fail
             // if the schema changes drastically between app updates.
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            print("🧱 SwiftData Persistence Initialized Successfully")
         } catch {
             fatalError("Could not initialize SwiftData Container: \(error.localizedDescription)")
         }
@@ -44,9 +43,7 @@ class PersistenceController {
         if container.mainContext.hasChanges {
             do {
                 try container.mainContext.save()
-                print("💾 Data saved successfully")
             } catch {
-                print("❌ Failed to save data: \(error.localizedDescription)")
             }
         }
     }
@@ -58,7 +55,6 @@ class PersistenceController {
             try container.mainContext.delete(model: APIEnvironment.self)
             try container.mainContext.save()
         } catch {
-            print("❌ Failed to clear data: \(error.localizedDescription)")
         }
     }
 }

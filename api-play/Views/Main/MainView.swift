@@ -118,9 +118,6 @@ struct MainView: View {
                 .keyboardShortcut("k", modifiers: .command)
                 .opacity(0)
         }
-        .sheet(isPresented: $showCommandPalette) {
-            CommandPaletteView().frame(width: 500, height: 400)
-        }
         .onReceive(
             NotificationCenter.default.publisher(
                 for: Notification.Name("SelectRequestInMainView")

@@ -95,7 +95,6 @@ struct WebView: NSViewRepresentable {
             
             webView.takeSnapshot(with: config) { image, error in
                 if let error = error {
-                    print("❌ Snapshot Error: \(error.localizedDescription)")
                     completion(nil)
                 } else {
                     completion(image)
@@ -115,7 +114,6 @@ struct WebView: NSViewRepresentable {
             let nsError = error as NSError
             if nsError.domain == "WebKitErrorDomain" && nsError.code == 204 { return }
             if nsError.code == NSURLErrorCancelled { return }
-            print("❌ WebView \(context) Error (\(nsError.code)): \(error.localizedDescription)")
         }
     }
 

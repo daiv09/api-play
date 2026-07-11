@@ -172,7 +172,7 @@ struct EditorView: View {
                 .font(.system(.body, design: .monospaced))
                 .controlSize(.large)
                 .frame(minWidth: 0)
-                .layoutPriority(1)
+                .layoutPriority(1) // ⚠️ This expands and squishes everything else!
 
             Button {
                 showAgentConsole.toggle()
@@ -202,9 +202,11 @@ struct EditorView: View {
             .disabled(network.isLoading)
             .animation(.snappy(duration: 0.2), value: network.isLoading)
             
+            // 🌟 THE FIX IS RIGHT HERE:
             CommitButtonView(request: request)
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+                .fixedSize() // 🔥 Forces SwiftUI to respect the full width of the text!
             
             Button {
                 showCodeGenSheet = true

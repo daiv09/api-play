@@ -11,30 +11,26 @@ struct CommitButtonView: View {
     @State private var showNoChangesAlert = false
     
     var body: some View {
-        Button {
-            handleCommitIntent()
-        } label: {
-            // 🔥 FIX: Replacing Label with an explicit HStack forces text layout visibility on macOS
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.up.circle.fill")
-                Text("Commit")
+            Button {
+                handleCommitIntent()
+            } label: {
+                Label("Commit", systemImage: "arrow.up.circle.fill")
+                    .foregroundStyle(request.isDirty ? .primary : .secondary)
             }
-            .foregroundStyle(request.isDirty ? .primary : .secondary)
+            .help(request.isDirty ? "Save a snapshot of your current changes" : "No changes to commit")
+            
+            // MARK: - Alerts
+            .alert("No Changes Detected", isPresented: $showNoChangesAlert) {
+                Button("Got it", role: .cancel) { }
+            } message: {
+                Text("Your current request state perfectly matches the most recent snapshot in history. Modify the URL, headers, or body to enable committing.")
+            }
+            
+            // MARK: - Sheets
+            .sheet(isPresented: $showCommitSheet) {
+                CommitDialog(request: request)
+            }
         }
-        .help(request.isDirty ? "Save a snapshot of your current changes" : "No changes to commit")
-        
-        // MARK: - Alerts
-        .alert("No Changes Detected", isPresented: $showNoChangesAlert) {
-            Button("Got it", role: .cancel) { }
-        } message: {
-            Text("Your current request state perfectly matches the most recent snapshot in history. Modify the URL, headers, or body to enable committing.")
-        }
-        
-        // MARK: - Sheets
-        .sheet(isPresented: $showCommitSheet) {
-            CommitDialog(request: request)
-        }
-    }
     
     private func handleCommitIntent() {
         if request.isDirty {
